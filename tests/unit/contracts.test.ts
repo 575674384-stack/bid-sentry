@@ -5,8 +5,11 @@ import {
   AppErrorSchema,
   IpcRequestEnvelopeSchema,
   SanitizationReportSchema,
+  SanitizationTaskResultSchema,
   TaskProgressSchema,
   VerificationReportSchema,
+  WorkerRequestSchema,
+  WorkerResponseSchema,
   createAppError,
   toSafeAppError
 } from '../../src/shared/contracts'
@@ -81,9 +84,9 @@ describe('task completion invariants', () => {
         }
       }).success
     ).toBe(false)
-    expect(TaskProgressSchema.safeParse({ ...base, verification: passedVerification() }).success).toBe(
-      true
-    )
+    expect(
+      TaskProgressSchema.safeParse({ ...base, verification: passedVerification() }).success
+    ).toBe(true)
     expect(
       TaskProgressSchema.safeParse({
         ...base,
@@ -165,6 +168,35 @@ describe('strict report and IPC contracts', () => {
     }
 
     expect(IpcRequestEnvelopeSchema.safeParse(request).success).toBe(false)
+  })
+
+  it('keeps public results path-free and internal worker messages strict', () => {
+    expect(
+      SanitizationTaskResultSchema.safeParse({
+        schemaVersion: 1,
+        taskId: TASK_ID,
+        report: {},
+        files: [],
+        absolutePath: '/private/output.docx'
+      }).success
+    ).toBe(false)
+    expect(
+      WorkerRequestSchema.safeParse({
+        schemaVersion: 1,
+        type: 'cancel',
+        taskId: TASK_ID,
+        command: 'unexpected'
+      }).success
+    ).toBe(false)
+    expect(
+      WorkerResponseSchema.safeParse({
+        schemaVersion: 1,
+        type: 'error',
+        taskId: TASK_ID,
+        error: createAppError('INVALID_REQUEST'),
+        stack: '/private/source.ts:1'
+      }).success
+    ).toBe(false)
   })
 })
 

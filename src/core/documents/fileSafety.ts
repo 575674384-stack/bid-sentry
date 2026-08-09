@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { lstat, link, mkdtemp, open, realpath, rm, unlink } from 'node:fs/promises'
-import { basename, dirname, extname, join, parse, resolve, sep } from 'node:path'
+import { basename, dirname, extname, join, parse, resolve, sep, win32 } from 'node:path'
 import { DOMParser, onWarningStopParsing } from '@xmldom/xmldom'
 import * as yauzl from 'yauzl'
 import {
@@ -54,6 +54,12 @@ export class TemporaryWorkspace {
   }
 }
 
+export interface PublishedFile {
+  absolutePath: string
+  device: number
+  inode: number
+}
+
 export async function createInputSnapshot(
   inputPath: string,
   signal?: AbortSignal
@@ -69,7 +75,7 @@ export async function createInputSnapshot(
   }
 
   const canonicalPath = await realpath(absolutePath)
-  if (normalizePath(canonicalPath) !== normalizePath(absolutePath)) {
+  if (normalizeFileIdentity(canonicalPath) !== normalizeFileIdentity(absolutePath)) {
     throw new DocumentSafetyError('INVALID_DOCUMENT')
   }
   if (fileInfo.size > MAX_INPUT_BYTES) {
@@ -104,7 +110,7 @@ export async function assertInputUnchanged(
   }
   const canonicalPath = await realpath(snapshot.absolutePath)
   if (
-    normalizePath(canonicalPath) !== normalizePath(snapshot.absolutePath) ||
+    normalizeFileIdentity(canonicalPath) !== normalizeFileIdentity(snapshot.absolutePath) ||
     current.size !== snapshot.size ||
     current.mtimeMs !== snapshot.mtimeMs
   ) {
@@ -145,12 +151,49 @@ export async function createTemporaryWorkspace(
   }
 
   const canonicalOutput = await realpath(resolvedOutput)
-  if (normalizePath(canonicalOutput) !== normalizePath(resolvedOutput)) {
+  if (normalizeFileIdentity(canonicalOutput) !== normalizeFileIdentity(resolvedOutput)) {
     throw new DocumentSafetyError('INVALID_DOCUMENT')
   }
 
   const rootPath = await mkdtemp(join(resolvedOutput, TEMPORARY_DIRECTORY_PREFIX))
   const workspace = new TemporaryWorkspace(rootPath, resolvedOutput)
+  TRUSTED_WORKSPACES.add(workspace)
+  return workspace
+}
+
+export async function adoptTemporaryWorkspace(
+  rootPath: string,
+  outputDirectory: string
+): Promise<TemporaryWorkspace> {
+  const resolvedRoot = resolve(rootPath)
+  const resolvedOutput = resolve(outputDirectory)
+  if (
+    dirname(resolvedRoot) !== resolvedOutput ||
+    !basename(resolvedRoot).startsWith(TEMPORARY_DIRECTORY_PREFIX) ||
+    resolvedRoot === resolvedOutput ||
+    resolvedRoot === resolve(sep)
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  const [rootInfo, outputInfo, canonicalRoot, canonicalOutput] = await Promise.all([
+    lstat(resolvedRoot),
+    lstat(resolvedOutput),
+    realpath(resolvedRoot),
+    realpath(resolvedOutput)
+  ]).catch((error: unknown) => {
+    throw new DocumentSafetyError('INTERNAL_ERROR', error)
+  })
+  if (
+    !rootInfo.isDirectory() ||
+    rootInfo.isSymbolicLink() ||
+    !outputInfo.isDirectory() ||
+    outputInfo.isSymbolicLink() ||
+    normalizeFileIdentity(canonicalRoot) !== normalizeFileIdentity(resolvedRoot) ||
+    normalizeFileIdentity(canonicalOutput) !== normalizeFileIdentity(resolvedOutput)
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  const workspace = new TemporaryWorkspace(resolvedRoot, resolvedOutput)
   TRUSTED_WORKSPACES.add(workspace)
   return workspace
 }
@@ -217,7 +260,7 @@ export async function finalizeVerifiedOutput(options: {
   outputPath: string
   verification: VerificationReport
   signal?: AbortSignal
-}): Promise<void> {
+}): Promise<PublishedFile> {
   const { workspace, input, temporaryPath, outputPath, signal } = options
   assertTrustedWorkspace(workspace)
   throwIfAborted(signal)
@@ -228,7 +271,10 @@ export async function finalizeVerifiedOutput(options: {
   if (!workspace.contains(temporaryPath)) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
-  if (normalizePath(dirname(resolve(outputPath))) !== normalizePath(workspace.outputDirectory)) {
+  if (
+    normalizeFileIdentity(dirname(resolve(outputPath))) !==
+    normalizeFileIdentity(workspace.outputDirectory)
+  ) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
   const outputDirectoryInfo = await lstat(workspace.outputDirectory)
@@ -236,7 +282,8 @@ export async function finalizeVerifiedOutput(options: {
   if (
     !outputDirectoryInfo.isDirectory() ||
     outputDirectoryInfo.isSymbolicLink() ||
-    normalizePath(canonicalOutputDirectory) !== normalizePath(workspace.outputDirectory)
+    normalizeFileIdentity(canonicalOutputDirectory) !==
+      normalizeFileIdentity(workspace.outputDirectory)
   ) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
@@ -256,15 +303,66 @@ export async function finalizeVerifiedOutput(options: {
   await handle.sync()
   await handle.close()
 
+  return publishReservedWorkspaceFile({ workspace, temporaryPath, outputPath })
+}
+
+export async function publishReservedWorkspaceFile(options: {
+  workspace: TemporaryWorkspace
+  temporaryPath: string
+  outputPath: string
+}): Promise<PublishedFile> {
+  const { workspace, temporaryPath, outputPath } = options
+  assertTrustedWorkspace(workspace)
+  if (
+    !workspace.contains(temporaryPath) ||
+    normalizeFileIdentity(dirname(resolve(outputPath))) !==
+      normalizeFileIdentity(workspace.outputDirectory)
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  const temporaryInfo = await lstat(temporaryPath)
+  if (!temporaryInfo.isFile() || temporaryInfo.isSymbolicLink()) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+
   try {
     await link(temporaryPath, outputPath)
-    await unlink(temporaryPath)
   } catch (error) {
     if (isNodeError(error) && error.code === 'EEXIST') {
       throw new DocumentSafetyError('OUTPUT_EXISTS', error)
     }
     throw error
   }
+  return {
+    absolutePath: resolve(outputPath),
+    device: temporaryInfo.dev,
+    inode: temporaryInfo.ino
+  }
+}
+
+export async function rollbackPublishedFiles(files: readonly PublishedFile[]): Promise<void> {
+  const failures: unknown[] = []
+  for (const file of [...files].reverse()) {
+    try {
+      const current = await lstat(file.absolutePath).catch((error: unknown) => {
+        if (isNodeError(error) && error.code === 'ENOENT') return null
+        throw error
+      })
+      if (!current) continue
+      if (
+        !current.isFile() ||
+        current.isSymbolicLink() ||
+        current.dev !== file.device ||
+        current.ino !== file.inode
+      ) {
+        throw new DocumentSafetyError('INTERNAL_ERROR')
+      }
+      await unlink(file.absolutePath)
+    } catch (error) {
+      failures.push(error)
+    }
+  }
+  if (failures.length > 0) throw new DocumentSafetyError('INTERNAL_ERROR', failures[0])
 }
 
 export async function cleanupTemporaryWorkspace(workspace: TemporaryWorkspace): Promise<void> {
@@ -288,6 +386,46 @@ export async function cleanupTemporaryWorkspace(workspace: TemporaryWorkspace): 
   }
   await rm(rootPath, { recursive: true, force: true })
   TRUSTED_WORKSPACES.delete(workspace)
+}
+
+export async function cleanupAbandonedTemporaryWorkspace(
+  rootPath: string,
+  outputDirectory: string
+): Promise<void> {
+  const resolvedRoot = resolve(rootPath)
+  const resolvedOutput = resolve(outputDirectory)
+  if (
+    dirname(resolvedRoot) !== resolvedOutput ||
+    !basename(resolvedRoot).startsWith(TEMPORARY_DIRECTORY_PREFIX) ||
+    resolvedRoot === resolvedOutput ||
+    resolvedRoot === resolve(sep)
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+
+  const rootInfo = await lstat(resolvedRoot).catch((error: unknown) => {
+    if (isNodeError(error) && error.code === 'ENOENT') return null
+    throw new DocumentSafetyError('INTERNAL_ERROR', error)
+  })
+  if (!rootInfo) return
+  if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+
+  const outputInfo = await lstat(resolvedOutput).catch((error: unknown) => {
+    throw new DocumentSafetyError('INTERNAL_ERROR', error)
+  })
+  const canonicalOutput = await realpath(resolvedOutput).catch((error: unknown) => {
+    throw new DocumentSafetyError('INTERNAL_ERROR', error)
+  })
+  if (
+    !outputInfo.isDirectory() ||
+    outputInfo.isSymbolicLink() ||
+    normalizeFileIdentity(canonicalOutput) !== normalizeFileIdentity(resolvedOutput)
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  await rm(resolvedRoot, { recursive: true, force: true })
 }
 
 async function detectDocumentType(filePath: string, signal?: AbortSignal): Promise<DocumentType> {
@@ -432,9 +570,12 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DocumentSafetyError('TASK_CANCELLED', signal.reason)
 }
 
-function normalizePath(filePath: string): string {
-  const normalized = resolve(filePath)
-  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+export function normalizeFileIdentity(
+  filePath: string,
+  platform: NodeJS.Platform = process.platform
+): string {
+  const normalized = platform === 'win32' ? win32.resolve(filePath) : resolve(filePath)
+  return platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
 function assertTrustedWorkspace(workspace: TemporaryWorkspace): void {

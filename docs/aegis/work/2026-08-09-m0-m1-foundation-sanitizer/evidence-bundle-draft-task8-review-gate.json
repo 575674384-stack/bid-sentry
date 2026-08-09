@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task8-review-gate",
+  "type": "advisory-code-review",
+  "source": "three findings-first reviews and targeted regressions",
+  "summary": "Final review 0 Critical/Important/Minor; closed synchronous settlement, artifact attestation, UUID workspace naming, rollback provenance, IPC budgets, journal bounds, and Windows path identity findings",
+  "verifier": "root coordinator and task6_code_review"
+}

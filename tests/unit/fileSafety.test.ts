@@ -1,13 +1,5 @@
 import { createWriteStream } from 'node:fs'
-import {
-  access,
-  mkdtemp,
-  open,
-  readFile,
-  rm,
-  symlink,
-  writeFile
-} from 'node:fs/promises'
+import { access, mkdtemp, open, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as yazl from 'yazl'
@@ -22,7 +14,9 @@ import {
   createInputSnapshot,
   createTemporaryWorkspace,
   finalizeVerifiedOutput,
+  normalizeFileIdentity,
   reserveTemporaryFile,
+  rollbackPublishedFiles,
   sha256File
 } from '../../src/core/documents/fileSafety'
 import type { VerificationReport } from '../../src/shared/contracts'
@@ -37,7 +31,9 @@ async function createTemporaryDirectory(): Promise<string> {
 
 afterEach(async () => {
   await Promise.all(
-    temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true }))
   )
 })
 
@@ -154,6 +150,12 @@ describe('createInputSnapshot', () => {
 })
 
 describe('immutable input and output boundaries', () => {
+  it('normalizes Windows path identity case-insensitively', () => {
+    expect(normalizeFileIdentity('C:\\Bid\\FILE.docx', 'win32')).toBe(
+      normalizeFileIdentity('c:\\bid\\file.DOCX', 'win32')
+    )
+  })
+
   it('detects an input changed after its snapshot', async () => {
     const directory = await createTemporaryDirectory()
     const inputPath = join(directory, 'input.pdf')
@@ -216,7 +218,45 @@ describe('immutable input and output boundaries', () => {
     })
 
     expect(await readFile(outputPath, 'utf8')).toContain('sanitized')
+    await expect(access(temporaryPath)).resolves.toBeUndefined()
+    await cleanupTemporaryWorkspace(workspace)
     await expect(access(temporaryPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(outputPath, 'utf8')).toContain('sanitized')
+  })
+
+  it('rolls back only the exact inode published by the task', async () => {
+    const directory = await createTemporaryDirectory()
+    const inputPath = join(directory, 'input.pdf')
+    await writeMinimalPdf(inputPath)
+    const input = await createInputSnapshot(inputPath)
+    const workspace = await createTemporaryWorkspace(directory)
+    const temporaryPath = await reserveTemporaryFile(workspace, 'input_sanitized.pdf')
+    await writeFile(temporaryPath, '%PDF-1.7\nsanitary output\n%%EOF', 'utf8')
+    const outputPath = buildSanitizedOutputPath(inputPath, directory)
+    const published = await finalizeVerifiedOutput({
+      workspace,
+      input,
+      temporaryPath,
+      outputPath,
+      verification: passedVerification(input.sha256, await sha256File(temporaryPath))
+    })
+
+    await rollbackPublishedFiles([published])
+    await expect(access(outputPath)).rejects.toMatchObject({ code: 'ENOENT' })
+
+    const republished = await finalizeVerifiedOutput({
+      workspace,
+      input,
+      temporaryPath,
+      outputPath,
+      verification: passedVerification(input.sha256, await sha256File(temporaryPath))
+    })
+    await unlink(outputPath)
+    await writeFile(outputPath, 'replacement owned by user', 'utf8')
+    await expect(rollbackPublishedFiles([republished])).rejects.toMatchObject({
+      appError: { code: 'INTERNAL_ERROR' }
+    })
+    expect(await readFile(outputPath, 'utf8')).toBe('replacement owned by user')
     await cleanupTemporaryWorkspace(workspace)
   })
 

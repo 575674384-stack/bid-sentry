@@ -26,10 +26,12 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task6-docx-review-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task7-pdf-quality-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task7-pdf-review-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task8-quality-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task8-review-gate.json
 
 ## Drift Check
 
-- Scope status: Task 7 完成 PDF 元数据安全重置与结构验证；下一切片仅进入计划内 Task 8，未进入 M2/M3/OCR
-- Compatibility status: PDF Info/XMP/Trailer ID 随机化；扫描 PDF 可清洗；签名/加密/损坏拒绝；页面/资源/注释/附件指纹通过后才可发布
-- Retirement status: DOCX 私有 XML 与临时输出守卫已 delete-first 迁至公共单一 owner；无并行 PDF 写入器、fallback 或跳过验证路径
+- Scope status: Task 8 completes only planned M1 orchestration, Worker, IPC, recovery, and verified publication; no M2/M3/OCR
+- Compatibility status: Inputs remain read-only; only core document adapters write; Main is sole completion authority after inode/hash/report/budget/cleanup attestation; Windows inode behavior remains for CI
+- Retirement status: Worker-success-immediately-cleans path retired; no fallback, second writer, or alternate completion owner
 - Advisory decision: continue

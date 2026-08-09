@@ -73,3 +73,19 @@ No evidence has been recorded yet.
 - Source: pdfSanitizer.test.ts; owner-retirement checks; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build; task-scoped Prettier; git diff --check
 - Summary: 10 个 PDF 集成测试与 59 个全仓测试通过；lint/typecheck/build/Task 7 格式/补丁检查通过；签名加密拒绝、Info/XMP/Trailer ID 随机化、结构指纹和失败阻断边界有效
 - Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task8-review-gate
+- Type: advisory-code-review
+- Source: three findings-first reviews and targeted regressions
+- Summary: Final review 0 Critical/Important/Minor; closed synchronous settlement, artifact attestation, UUID workspace naming, rollback provenance, IPC budgets, journal bounds, and Windows path identity findings
+- Verifier: root coordinator and task6_code_review
+
+## EvidenceBundleDraft
+
+- Artifact key: task8-quality-gate
+- Type: automated-verification
+- Source: focused regressions; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build; task-scoped Prettier; git diff --check
+- Summary: 14 test files and 103 tests passed; production Worker-to-Main workspace attestation, cancellation, crash, tampering, rollback, recovery, strict IPC, response/event budgets, and sensitive-file exclusion covered
+- Verifier: root coordinator

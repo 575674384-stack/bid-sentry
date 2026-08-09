@@ -1,29 +1,18 @@
 {
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
-  "currentTodo": "Task 8 实现清洗任务编排、Worker 和 IPC",
+  "currentTodo": "Task 9 实现清洗与设置用户界面",
   "completedTodos": [
-    "Task 1 建立可构建的 Electron 安全骨架",
-    "Task 2 定义版本化共享契约与错误模型",
-    "Task 3 实现设置、安全密钥与 AI 连接测试",
-    "Task 4 实现输入快照、路径安全与原子输出",
-    "Task 5 实现随机映射和脱敏报告",
-    "Task 6 实现 DOCX 安全适配器",
-    "Task 7 实现 PDF 安全适配器"
+    "Task 1-7 基础设施、契约、安全事实来源和 DOCX/PDF 适配器",
+    "Task 8 清洗任务编排、Worker、IPC、恢复日志和两阶段验证发布"
   ],
-  "activeSlice": "Task 8：预览/执行编排、Utility Process、任务状态与 IPC",
+  "activeSlice": "Task 9：Renderer API、清洗状态机、清洗页面和 AI 设置页",
   "evidenceRefs": [
-    "task1-quality-gate",
-    "task2-contract-gate",
-    "task3-settings-security-gate",
-    "task4-file-safety-gate",
-    "task5-random-report-gate",
-    "task6-docx-review-gate",
-    "task6-docx-quality-gate",
-    "task7-pdf-review-gate",
-    "task7-pdf-quality-gate"
+    "task8-review-gate",
+    "task8-quality-gate",
+    "docs/aegis/adr/ADR-0001-verified-document-publication.md"
   ],
   "blockedOn": null,
-  "nextStep": "按计划实现 sanitizeJob 的 preview/execute，再接线 Worker、TaskManager 和 IPC",
+  "nextStep": "实现 Renderer 类型安全 API、纯 reducer/hook、清洗流程与设置表单，并运行 focused/full gates",
   "updatedAt": "2026-08-09"
 }

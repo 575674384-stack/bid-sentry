@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task8-quality-gate",
+  "type": "automated-verification",
+  "source": "focused regressions; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build; task-scoped Prettier; git diff --check",
+  "summary": "14 test files and 103 tests passed; production Worker-to-Main workspace attestation, cancellation, crash, tampering, rollback, recovery, strict IPC, response/event budgets, and sensitive-file exclusion covered",
+  "verifier": "root coordinator"
+}

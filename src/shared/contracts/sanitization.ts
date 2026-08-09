@@ -7,6 +7,12 @@ import {
 } from './documents'
 import { AppErrorSchema } from './errors'
 
+// Keep enough room for the IPC envelope and request ID inside the 4 MiB
+// Renderer response ceiling. The same schema is used for a pre-publication
+// check in the Worker, so an oversized successful result never reaches disk.
+export const MAX_SANITIZATION_RENDERER_DATA_BYTES = 4 * 1024 * 1024 - 4 * 1024
+export const MAX_TASK_PROGRESS_BYTES = 1024 * 1024 - 4 * 1024
+
 export const TaskStateSchema = z.enum([
   'created',
   'previewing',
@@ -30,7 +36,7 @@ export const VerificationReportSchema = z
   .object({
     schemaVersion: z.literal(1),
     status: z.enum(['passed', 'failed']),
-    checks: z.array(VerificationCheckSchema).min(1),
+    checks: z.array(VerificationCheckSchema).min(1).max(10_000),
     inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
     outputSha256: z.string().regex(/^[a-f0-9]{64}$/u)
   })
@@ -59,9 +65,9 @@ export const SanitizationPreviewFileSchema = z
     displayName: z.string().trim().min(1).max(255),
     documentType: DocumentTypeSchema,
     size: z.number().int().nonnegative(),
-    fields: z.array(MetadataFieldDescriptorSchema),
-    warnings: z.array(z.string().trim().min(1).max(500)),
-    blockers: z.array(AppErrorSchema)
+    fields: z.array(MetadataFieldDescriptorSchema).max(10_000),
+    warnings: z.array(z.string().trim().min(1).max(500)).max(1_000),
+    blockers: z.array(AppErrorSchema).max(100)
   })
   .strict()
 
@@ -71,9 +77,17 @@ export const SanitizationPreviewSchema = z
     taskId: z.string().uuid(),
     planDigest: z.string().regex(/^[a-f0-9]{64}$/u),
     createdAt: z.string().datetime({ offset: true }),
-    files: z.array(SanitizationPreviewFileSchema).min(1)
+    files: z.array(SanitizationPreviewFileSchema).min(1).max(20)
   })
   .strict()
+  .superRefine((preview, context) => {
+    if (serializedSize(preview) > MAX_SANITIZATION_RENDERER_DATA_BYTES) {
+      context.addIssue({
+        code: 'custom',
+        message: '清洗预览超过安全响应大小限制。'
+      })
+    }
+  })
 
 export const SanitizationCommandSchema = z
   .object({
@@ -125,6 +139,12 @@ export const TaskProgressSchema = z
         path: ['error']
       })
     }
+    if (serializedSize(progress) > MAX_TASK_PROGRESS_BYTES) {
+      context.addIssue({
+        code: 'custom',
+        message: '任务进度超过安全事件大小限制。'
+      })
+    }
   })
 
 export const SanitizedFieldResultSchema = z
@@ -141,11 +161,24 @@ export const SanitizationFileResultSchema = z
     input: ReportFileIdentitySchema,
     output: ReportFileIdentitySchema,
     outputDisplayName: z.string().trim().min(1).max(255),
-    fields: z.array(SanitizedFieldResultSchema),
-    warnings: z.array(z.string().trim().min(1).max(500)),
+    fields: z.array(SanitizedFieldResultSchema).max(10_000),
+    warnings: z.array(z.string().trim().min(1).max(500)).max(1_000),
     verification: VerificationReportSchema
   })
   .strict()
+  .superRefine((file, context) => {
+    if (
+      file.input.sha256 !== file.verification.inputSha256 ||
+      file.output.sha256 !== file.verification.outputSha256 ||
+      file.input.documentType !== file.output.documentType ||
+      file.output.displayName !== file.outputDisplayName
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: '文件身份、输出名称与验证哈希必须一致。'
+      })
+    }
+  })
 
 export const SanitizationReportSchema = z
   .object({
@@ -155,8 +188,8 @@ export const SanitizationReportSchema = z
     startedAt: z.string().datetime({ offset: true }),
     completedAt: z.string().datetime({ offset: true }),
     status: z.enum(['completed', 'failed', 'cancelled']),
-    files: z.array(SanitizationFileResultSchema),
-    warnings: z.array(z.string().trim().min(1).max(500))
+    files: z.array(SanitizationFileResultSchema).max(20),
+    warnings: z.array(z.string().trim().min(1).max(500)).max(1_000)
   })
   .strict()
   .superRefine((report, context) => {
@@ -186,6 +219,62 @@ export const SanitizationReportSchema = z
     }
   })
 
+export const SanitizationResultFileSchema = z
+  .object({
+    fileId: z.string().uuid(),
+    displayName: z.string().trim().min(1).max(255),
+    kind: z.enum(['sanitized-document', 'json-report', 'html-report'])
+  })
+  .strict()
+
+export const SanitizationTaskResultSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    taskId: z.string().uuid(),
+    report: SanitizationReportSchema,
+    files: z.array(SanitizationResultFileSchema).min(3).max(22)
+  })
+  .strict()
+  .superRefine((result, context) => {
+    if (result.report.taskId !== result.taskId || result.report.status !== 'completed') {
+      context.addIssue({
+        code: 'custom',
+        message: '任务结果必须关联同一已完成报告。',
+        path: ['report']
+      })
+    }
+
+    const documentCount = result.files.filter((file) => file.kind === 'sanitized-document').length
+    const jsonCount = result.files.filter((file) => file.kind === 'json-report').length
+    const htmlCount = result.files.filter((file) => file.kind === 'html-report').length
+    if (
+      documentCount !== result.report.files.length ||
+      jsonCount !== 1 ||
+      htmlCount !== 1 ||
+      new Set(result.files.map((file) => file.fileId)).size !== result.files.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: '任务结果文件清单与报告不一致。',
+        path: ['files']
+      })
+    }
+    if (serializedSize(result) > MAX_SANITIZATION_RENDERER_DATA_BYTES) {
+      context.addIssue({
+        code: 'custom',
+        message: '清洗结果超过安全响应大小限制。'
+      })
+    }
+  })
+
+function serializedSize(value: unknown): number {
+  try {
+    return new TextEncoder().encode(JSON.stringify(value)).byteLength
+  } catch {
+    return Number.POSITIVE_INFINITY
+  }
+}
+
 export type TaskState = z.infer<typeof TaskStateSchema>
 export type VerificationCheck = z.infer<typeof VerificationCheckSchema>
 export type VerificationReport = z.infer<typeof VerificationReportSchema>
@@ -194,3 +283,5 @@ export type SanitizationCommand = z.infer<typeof SanitizationCommandSchema>
 export type TaskProgress = z.infer<typeof TaskProgressSchema>
 export type SanitizationFileResult = z.infer<typeof SanitizationFileResultSchema>
 export type SanitizationReport = z.infer<typeof SanitizationReportSchema>
+export type SanitizationResultFile = z.infer<typeof SanitizationResultFileSchema>
+export type SanitizationTaskResult = z.infer<typeof SanitizationTaskResultSchema>

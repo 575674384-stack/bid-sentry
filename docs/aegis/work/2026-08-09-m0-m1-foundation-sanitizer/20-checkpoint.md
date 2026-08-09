@@ -219,3 +219,26 @@
 - New risk signals:
 - 主流 PDF 阅读器与合法脱敏真实样例兼容性仍需 Task 10 手工证据
 - Advisory decision: continue
+
+## DriftCheckDraft
+
+- Scope status: Task 8 completes only planned M1 orchestration, Worker, IPC, recovery, and verified publication; no M2/M3/OCR
+- Compatibility status: Inputs remain read-only; only core document adapters write; Main is sole completion authority after inode/hash/report/budget/cleanup attestation; Windows inode behavior remains for CI
+- Retirement status: Worker-success-immediately-cleans path retired; no fallback, second writer, or alternate completion owner
+- New risk signals:
+- Windows dev/ino and hard-link behavior requires Task 10 CI evidence
+- Advisory decision: continue
+
+## Checkpoint Update
+
+- Current todo: Task 9 实现清洗与设置用户界面
+- Active slice: Task 9：Renderer API、清洗状态机、清洗页面和 AI 设置页
+- Completed todos:
+- Task 1-7 基础设施、契约、安全事实来源和 DOCX/PDF 适配器
+- Task 8 清洗任务编排、Worker、IPC、恢复日志和两阶段验证发布
+- Evidence refs:
+- task8-review-gate
+- task8-quality-gate
+- docs/aegis/adr/ADR-0001-verified-document-publication.md
+- Blocked on: none
+- Next step: 实现 Renderer 类型安全 API、纯 reducer/hook、清洗流程与设置表单，并运行 focused/full gates
