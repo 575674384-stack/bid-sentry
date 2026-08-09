@@ -237,7 +237,7 @@ AI 不参与 M1 文件修改。M0 只实现 OpenAI 兼容接口配置与连接�
 6. 创建仅显示“Bid Sentry / 文档安全助手”的最小界面和本地 CSS，不引用 CDN、远程字体或内联脚本。
 7. 创建 BrowserWindow，设置安全 webPreferences、外部导航拦截、生产环境本地文件加载和开发环境 Vite URL 加载。
 8. 创建空白 Preload API 和 Worker 消息循环，未知消息返回稳定错误而不执行操作。
-9. 运行 `pnpm lint && pnpm typecheck && pnpm test --run && pnpm build`；预期全部退出码为 0，`out/main/index.js`、`out/main/worker.js`、`out/preload/index.mjs` 和 Renderer 产物存在。
+9. 运行 `pnpm lint && pnpm typecheck && pnpm test --run && pnpm build`；预期全部退出码为 0，`out/main/index.js`、`out/main/worker.js`、sandbox 可执行且除 Electron 内建模块外无运行时 `require` 的 CommonJS `out/preload/index.cjs` 和 Renderer 产物存在。
 
 **Verification**
 
@@ -248,7 +248,7 @@ pnpm test --run
 pnpm build
 test -f out/main/index.js
 test -f out/main/worker.js
-test -f out/preload/index.mjs
+test -f out/preload/index.cjs
 ```
 
 提交：`chore: scaffold secure electron application`
@@ -608,10 +608,10 @@ pnpm build
 
 **Files**
 
-- Create：`playwright.config.ts`、`tests/e2e/app.spec.ts`。
+- Create：`playwright.config.ts`、`vitest.config.ts`、`tests/e2e/app.spec.ts`、`src/main/e2e/e2eHarness.ts`。
 - Create：`.github/workflows/ci.yml`。
-- Modify：`electron-builder.yml`、`package.json`。
-- Create：`README.md`、`CONTRIBUTING.md`。
+- Modify：`electron-builder.yml`、`electron.vite.config.ts`、`package.json`、`pnpm-workspace.yaml`、`src/main/index.ts`。
+- Create：`scripts/audit-package.mjs`、`README.md`、`CONTRIBUTING.md`、`LICENSE`。
 - Modify：`docs/aegis/specs/2026-08-09-bid-sentry-design.md` 仅在实际证据要求修正规格时修改。
 
 **Why**
@@ -634,12 +634,12 @@ pnpm build
 1. 配置 Playwright Electron 启动已构建应用，测试安全 webPreferences、设置表单、合成 DOCX 选择、预览、确认、完成、报告和取消路径。
 2. 为文件选择 IPC 提供仅测试构建启用的固定夹具注入；开关只接受 `BID_SENTRY_E2E=1`，生产打包配置明确排除测试入口。
 3. 在 Linux 本机运行 `pnpm build && xvfb-run -a pnpm playwright test`，预期全部 E2E 通过。
-4. 配置 GitHub Actions 的 ubuntu-latest/windows-latest 矩阵：checkout、pnpm、Node 22、冻结安装、lint、typecheck、test、build；Linux 跑 xvfb E2E，两平台各自生成未发布安装包 artifact。
+4. 配置 GitHub Actions 的 ubuntu-latest/windows-latest 矩阵：checkout、pnpm、Node 22、冻结安装、lint、typecheck、test、build；两平台都跑真实 Electron E2E，并各自生成、审计和启动未发布安装包 artifact。
 5. 配置 electron-builder 的 appId、productName、asar、文件白名单和 Windows/Linux targets；M1 不配置自定义图标，并禁止把 `.env`、测试夹具、日志和 docs/aegis 打入应用。
 6. README 记录功能范围、隐私模型、支持格式、拒绝条件、安装、开发命令、AI Key 存储行为和“不替代人工复核”。
 7. CONTRIBUTING 记录无真实标书/个人信息夹具政策、格式适配器停止条件、提交前命令和安全问题报告方式。
-8. 运行全量本机门：`pnpm lint && pnpm typecheck && pnpm test --run && pnpm build && xvfb-run -a pnpm playwright test && pnpm package:linux`。
-9. 检查安装包内容不含 `.env`、`settings.v1.json`、`secrets.v1.bin`、测试夹具或任务报告；启动 AppImage/deb 解包应用完成一次合成 DOCX 清洗冒烟测试。
+8. 运行全量本机门：`pnpm lint && pnpm typecheck && pnpm test --run && pnpm build && xvfb-run -a pnpm test:e2e && pnpm package:linux`。
+9. 用 `pnpm audit:package` 检查安装包内容不含 `.env`、`settings.v1.json`、`secrets.v1.bin`、测试夹具、E2E 入口或任务报告；直接启动解包后的生产应用完成 ASAR/Preload/Renderer 冒烟测试，合成 DOCX 全流程由真实 Electron E2E 证明。
 10. 对照设计规格第 12.2 节记录 M1 验收证据；若实现验证迫使架构决策变化，先更新设计规格并审阅，随后执行 ADR Backfill Check，不从计划直接创建未经验证 ADR。
 
 **Verification**
@@ -649,8 +649,10 @@ pnpm lint
 pnpm typecheck
 pnpm test --run
 pnpm build
-xvfb-run -a pnpm playwright test
+xvfb-run -a pnpm test:e2e
 pnpm package:linux
+pnpm audit:package
+BID_SENTRY_PACKAGED_APP=release/linux-unpacked/bid-sentry xvfb-run -a pnpm test:e2e:packaged
 python /root/.codex/aegis/scripts/aegis-workspace.py check --root /vol1/1000/docker/dpanel/compose/bid-sentry
 git diff --check
 ```

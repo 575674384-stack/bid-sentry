@@ -18,6 +18,8 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 ## Evidence Bundle Refs
 
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task1-quality-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-local-quality-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-review-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task2-contract-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task3-settings-security-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task4-file-safety-gate.json
@@ -28,10 +30,12 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task7-pdf-review-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task8-quality-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task8-review-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task9-quality-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task9-review-gate.json
 
 ## Drift Check
 
-- Scope status: Task 8 completes only planned M1 orchestration, Worker, IPC, recovery, and verified publication; no M2/M3/OCR
-- Compatibility status: Inputs remain read-only; only core document adapters write; Main is sole completion authority after inode/hash/report/budget/cleanup attestation; Windows inode behavior remains for CI
-- Retirement status: Worker-success-immediately-cleans path retired; no fallback, second writer, or alternate completion owner
-- Advisory decision: continue
+- Scope status: Task 10 only adds M1 E2E, CI, packaging, package audit, open-source docs and release evidence; no OCR, M2, M3, server, database, telemetry or updater
+- Compatibility status: Windows/Linux x64 and DOCX/PDF boundaries remain; production packages exclude E2E/private/test artifacts; sandboxed bundled CJS Preload is baseline-synced in ADR-0002; original-file and verified-publication invariants unchanged
+- Retirement status: Failed ESM/externalized preload paths are retired without fallback; E2E harness is test-build-only; app-builder-lib @electron/get override has an explicit upstream retirement trigger; no second writer or verification bypass
+- Advisory decision: needs-verification

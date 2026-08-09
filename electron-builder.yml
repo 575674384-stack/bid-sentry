@@ -1,17 +1,33 @@
 appId: io.github.bidsentry.desktop
 productName: Bid Sentry
 asar: true
+compression: maximum
 directories:
   output: release
 files:
   - out/**
+  - '!**/*.map'
+  - '!node_modules/**/{test,tests,__tests__}/**'
+  - '!out/main/chunks/e2eHarness-*'
   - package.json
+  - LICENSE
+artifactName: ${name}-${version}-${os}-${arch}.${ext}
 linux:
   category: Utility
+  executableName: bid-sentry
+  maintainer: Bid Sentry contributors <575674384-stack@users.noreply.github.com>
+  syncDesktopName: true
   target:
     - AppImage
     - deb
 win:
+  executableName: bid-sentry
   target:
     - nsis
     - portable
+nsis:
+  artifactName: ${name}-setup-${version}-${os}-${arch}.${ext}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+portable:
+  artifactName: ${name}-portable-${version}-${os}-${arch}.${ext}

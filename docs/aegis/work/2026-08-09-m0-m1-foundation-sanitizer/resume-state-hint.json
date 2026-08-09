@@ -2,10 +2,10 @@
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
   "lastCheckpointRef": "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/todo-checkpoint-draft.json",
-  "resumeInstruction": "从 Task 9 提交后的干净 main 开始；先复核 Task 10 计划与 Main 文件选择边界，再实现 E2E/CI/打包/文档",
+  "resumeInstruction": "从 Task 10 提交后的 main 继续；不得在 Windows job 通过前创建 v0.1.0 tag 或宣称 M1/release complete",
   "knownPartialWork": [
-    "Task 1-8 基础设施、契约、安全、格式适配器与两阶段任务编排",
-    "Task 9 清洗与 AI 设置用户界面"
+    "Task 1-9 全部实现并通过各自质量门",
+    "Task 10 本地实现、全量测试、Linux 打包、双 ASAR 审计、生产包启动与独立复审"
   ],
   "mustReadBeforeContinuing": [
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/10-intent.md",
@@ -13,6 +13,6 @@
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/todo-checkpoint-draft.json"
   ],
   "unsafeToAssume": [
-    "不得把 Linux 本机证据当作 Windows 证据，不得把测试夹具入口打入发布包，不得读取或打包 test-apikey.md"
+    "Linux cross-build win-unpacked 不是 Windows-host、NSIS 或 portable 安装器证据；不得读取或发布 test-apikey.md"
   ]
 }

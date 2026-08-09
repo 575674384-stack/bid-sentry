@@ -12,3 +12,6 @@ settings.v1.json
 secrets.v1.bin
 test-apikey.md
 .bid-sentry-tmp-*
+.playwright-cli/
+.DS_Store
+Thumbs.db

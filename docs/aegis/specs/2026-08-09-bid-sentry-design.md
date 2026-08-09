@@ -199,6 +199,7 @@ Bid Sentry 是面向投标文件制作场景的开源单机桌面工具。它在
 
 - `renderer`：界面和用户确认，不访问 Node API、文件系统或密钥。
 - `preload`：暴露最小、版本化、Schema 校验的 IPC 白名单。
+- Preload 生产产物固定为 bundled CommonJS `out/preload/index.cjs`：除 Electron 内建模块外不得留下运行时外部依赖或 `require`；Main 只加载该产物，并保持 Renderer sandbox。原因与被否决路径见 `docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md`。
 - `main`：窗口、文件选择、任务生命周期、设置、安全存储和 AI 网络请求。
 - `worker`：CPU 密集或可能失败的文档解析、转换、清洗和验证。
 - `core/documents`：文档格式与安全处理的唯一所有者。

@@ -55,13 +55,12 @@ describe('testOpenAiCompatibleConnection', () => {
   it('aborts a slow request and reports a timeout', async () => {
     const fetchMock: typeof fetch = async (_input, init) =>
       new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'AbortError'))
+        )
       })
 
-    const result = await testOpenAiCompatibleConnection(
-      { ...CONNECTION, timeoutMs: 5 },
-      fetchMock
-    )
+    const result = await testOpenAiCompatibleConnection({ ...CONNECTION, timeoutMs: 5 }, fetchMock)
 
     expect(result).toMatchObject({ ok: false, status: 'timeout' })
   })

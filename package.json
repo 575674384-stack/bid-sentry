@@ -2,6 +2,7 @@
   "name": "bid-sentry",
   "version": "0.1.0",
   "description": "Local-first bid document safety assistant",
+  "desktopName": "bid-sentry",
   "type": "module",
   "main": "./out/main/index.js",
   "author": "Bid Sentry contributors",
@@ -14,15 +15,18 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "build:e2e": "cross-env BID_SENTRY_E2E=1 electron-vite build",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "test": "vitest --passWithNoTests",
     "test:coverage": "vitest run --coverage --passWithNoTests",
-    "test:e2e": "playwright test",
+    "test:e2e": "pnpm build:e2e && cross-env PLAYWRIGHT_HTML_OPEN=never playwright test",
+    "test:e2e:packaged": "cross-env PLAYWRIGHT_HTML_OPEN=never playwright test -g \"launches the packaged production app\"",
     "package:win": "pnpm build && electron-builder --win --x64",
     "package:linux": "pnpm build && electron-builder --linux --x64",
+    "audit:package": "node scripts/audit-package.mjs",
     "format:check": "prettier --check ."
   },
   "dependencies": {
@@ -38,6 +42,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@electron/asar": "3.4.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "~1.62.1",
     "@types/node": "^26.2.0",
@@ -47,6 +52,7 @@
     "@types/yazl": "^3.3.1",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "cross-env": "10.1.0",
     "electron": "^43.3.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",

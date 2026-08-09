@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   main: {
+    define: {
+      __BID_SENTRY_E2E_BUILD__: JSON.stringify(process.env.BID_SENTRY_E2E === '1')
+    },
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
@@ -18,14 +21,16 @@ export default defineConfig({
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
     build: {
+      externalizeDeps: false,
       rollupOptions: {
+        external: ['electron'],
         input: {
           index: resolve('src/preload/index.ts')
         },
         output: {
-          entryFileNames: '[name].js'
+          format: 'cjs',
+          entryFileNames: '[name].cjs'
         }
       }
     }

@@ -7,6 +7,9 @@ import { ElectronSafeStorageSecretStore } from './settings/secretStore'
 import { SettingsService } from './settings/settingsService'
 import { TaskManager, type ManagedWorkerProcess } from './tasks/taskManager'
 import { WorkspaceJournal } from './tasks/workspaceJournal'
+import type { E2eHarness } from './e2e/e2eHarness'
+
+declare const __BID_SENTRY_E2E_BUILD__: boolean
 
 const currentDirectory = fileURLToPath(new URL('.', import.meta.url))
 
@@ -19,7 +22,7 @@ function createWindow(): BrowserWindow {
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
-      preload: join(currentDirectory, '../preload/index.mjs'),
+      preload: join(currentDirectory, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -50,7 +53,10 @@ let activeTaskManager: TaskManager | null = null
 let shutdownStarted = false
 let shutdownComplete = false
 
-app.whenReady().then(async () => {
+async function startApplication(): Promise<void> {
+  const e2eHarness = await loadE2eHarness()
+  if (e2eHarness) app.setPath('userData', e2eHarness.userDataDirectory)
+  await app.whenReady()
   app.setAppUserModelId('io.github.bidsentry.desktop')
   const userDataDirectory = app.getPath('userData')
   const settingsService = new SettingsService(
@@ -61,16 +67,10 @@ app.whenReady().then(async () => {
     join(userDataDirectory, 'temporary-workspaces.v1.json')
   )
   await workspaceJournal.recover()
-  const taskManager = new TaskManager(
-    () =>
-      utilityProcess.fork(join(currentDirectory, 'worker.js'), [], {
-        serviceName: 'Bid Sentry Document Worker'
-      }) as unknown as ManagedWorkerProcess,
-    {
-      recordWorkspace: (workspace) => workspaceJournal.add(workspace),
-      forgetWorkspace: (rootPath) => workspaceJournal.remove(rootPath)
-    }
-  )
+  const taskManager = new TaskManager(() => createWorker(e2eHarness), {
+    recordWorkspace: (workspace) => workspaceJournal.add(workspace),
+    forgetWorkspace: (rootPath) => workspaceJournal.remove(rootPath)
+  })
   activeTaskManager = taskManager
   disposeIpc = registerIpc({
     ipcMain: ipcMain as unknown as IpcMainLike,
@@ -78,6 +78,7 @@ app.whenReady().then(async () => {
     taskManager,
     appVersion: app.getVersion(),
     async selectInputPaths() {
+      if (e2eHarness) return e2eHarness.inputPaths
       const result = await dialog.showOpenDialog({
         title: '选择需要清洗的 DOCX/PDF 文件',
         properties: ['openFile', 'multiSelections'],
@@ -86,6 +87,7 @@ app.whenReady().then(async () => {
       return result.canceled ? null : result.filePaths
     },
     async selectOutputDirectory() {
+      if (e2eHarness) return e2eHarness.outputDirectory
       const result = await dialog.showOpenDialog({
         title: '选择输出目录',
         properties: ['openDirectory', 'createDirectory']
@@ -93,6 +95,10 @@ app.whenReady().then(async () => {
       return result.canceled ? null : (result.filePaths[0] ?? null)
     },
     showResultInFolder(absolutePath) {
+      if (e2eHarness) {
+        e2eHarness.recordRevealedFile(absolutePath)
+        return
+      }
       shell.showItemInFolder(absolutePath)
     }
   })
@@ -103,7 +109,23 @@ app.whenReady().then(async () => {
       createWindow()
     }
   })
-})
+}
+
+function createWorker(e2eHarness: E2eHarness | null): ManagedWorkerProcess {
+  const workerPath = join(currentDirectory, 'worker.js')
+  if (e2eHarness) return e2eHarness.createWorker(workerPath)
+  return utilityProcess.fork(workerPath, [], {
+    serviceName: 'Bid Sentry Document Worker'
+  }) as unknown as ManagedWorkerProcess
+}
+
+async function loadE2eHarness(): Promise<E2eHarness | null> {
+  if (!__BID_SENTRY_E2E_BUILD__) return null
+  const { createE2eHarness } = await import('./e2e/e2eHarness')
+  return createE2eHarness(process.env)
+}
+
+void startApplication().catch(() => app.exit(1))
 
 app.on('before-quit', (event) => {
   if (shutdownComplete) return

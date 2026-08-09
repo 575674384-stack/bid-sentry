@@ -105,3 +105,19 @@ No evidence has been recorded yet.
 - Source: findings-first working-tree review and focused lifecycle regressions
 - Summary: Final review 0 Critical/Important/Minor; closed page-unmount task loss, abandoned awaiting-preview concurrency, duplicate preview identities, and overlapping selection controls
 - Verifier: root coordinator and task6_code_review
+
+## EvidenceBundleDraft
+
+- Artifact key: task10-local-quality-gate
+- Type: automated-verification
+- Source: Prettier; lint; typecheck; 119 Vitest tests; coverage; production build marker audit; 4 Electron E2E flows; Linux AppImage/deb; Linux and Windows unpacked ASAR audit; packaged production startup; npm production audit
+- Summary: 稳定工作树本地门通过：15 files/119 tests；85.93% statements/79.69% branches/89.58% functions/88.48% lines；4 Electron E2E passed；AppImage/deb generated；Linux/Windows ASAR audits and packaged startup passed；生产构建无 E2E 激活标记/chunk，Preload 仅运行时 require Electron；npm production audit无已知漏洞。Windows-host E2E/installer evidence pending CI.
+- Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task10-review-gate
+- Type: advisory-code-review
+- Source: findings-first working-tree review; current baseline and ADR review; final diff inspection
+- Summary: 最终独立复审 0 Critical/Important/Minor；已关闭 Windows 完整 E2E、NSIS/portable 名称冲突、sandboxed bundled CJS Preload ADR/基线、transitive override retirement 和预发布文案缺口。残余仅为待执行 Windows-host CI 与真实安装器证据。
+- Verifier: root coordinator and task6_code_review

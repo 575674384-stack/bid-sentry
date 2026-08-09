@@ -1,17 +1,17 @@
 {
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
-  "currentTodo": "Task 10 完成 E2E、双平台 CI、打包和 M1 文档",
+  "currentTodo": "Task 10 等待 Windows/Linux GitHub Actions 与发布证据",
   "completedTodos": [
-    "Task 1-8 基础设施、契约、安全、格式适配器与两阶段任务编排",
-    "Task 9 清洗与 AI 设置用户界面"
+    "Task 1-9 全部实现并通过各自质量门",
+    "Task 10 本地实现、全量测试、Linux 打包、双 ASAR 审计、生产包启动与独立复审"
   ],
-  "activeSlice": "Task 10：Electron E2E、测试夹具注入、CI、打包白名单、README 与 CONTRIBUTING",
+  "activeSlice": "提交并推送 Task 10，等待 GitHub Actions 两平台 E2E/安装包通过后记录最终证据并发布 v0.1.0",
   "evidenceRefs": [
-    "task9-quality-gate",
-    "task9-review-gate"
+    "task10-local-quality-gate",
+    "task10-review-gate"
   ],
-  "blockedOn": null,
-  "nextStep": "提交 Task 9 后实现只在 BID_SENTRY_E2E=1 生效的测试注入与 Electron Playwright 路径",
+  "blockedOn": "Windows-host GitHub Actions 尚未运行",
+  "nextStep": "提交 Task 10 工作树并推送 main；等待 Linux/Windows CI 通过，下载 CI 安装包并核验后更新最终 evidence",
   "updatedAt": "2026-08-09"
 }

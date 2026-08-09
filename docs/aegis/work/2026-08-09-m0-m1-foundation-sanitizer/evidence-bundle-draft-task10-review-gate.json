@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task10-review-gate",
+  "type": "advisory-code-review",
+  "source": "findings-first working-tree review; current baseline and ADR review; final diff inspection",
+  "summary": "最终独立复审 0 Critical/Important/Minor；已关闭 Windows 完整 E2E、NSIS/portable 名称冲突、sandboxed bundled CJS Preload ADR/基线、transitive override retirement 和预发布文案缺口。残余仅为待执行 Windows-host CI 与真实安装器证据。",
+  "verifier": "root coordinator and task6_code_review"
+}

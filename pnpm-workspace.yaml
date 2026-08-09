@@ -2,3 +2,7 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
+# app-builder-lib 26.15.x reads ElectronDownloadCacheMode, which is absent in @electron/get 3.0.0.
+# Retire this override when app-builder-lib requires >=3.1.0 or stops using that enum and both package gates pass without it.
+overrides:
+  app-builder-lib>@electron/get: 3.1.0

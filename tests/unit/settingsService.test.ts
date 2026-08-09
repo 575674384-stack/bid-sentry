@@ -19,7 +19,9 @@ async function createTemporaryDirectory(): Promise<string> {
 
 afterEach(async () => {
   await Promise.all(
-    temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true }))
   )
 })
 
@@ -85,7 +87,9 @@ describe('SettingsService', () => {
   it('quarantines malformed settings and returns safe defaults', async () => {
     const directory = await createTemporaryDirectory()
     const settingsPath = join(directory, 'settings.v1.json')
-    await import('node:fs/promises').then(({ writeFile }) => writeFile(settingsPath, '{broken', 'utf8'))
+    await import('node:fs/promises').then(({ writeFile }) =>
+      writeFile(settingsPath, '{broken', 'utf8')
+    )
     const service = new SettingsService(settingsPath, new MemorySecretStore(), () => 1234)
 
     const settings = await service.getPublicSettings()
@@ -114,12 +118,8 @@ describe('SettingsService', () => {
 
 describe('normalizeAiBaseUrl', () => {
   it('normalizes trailing slashes and permits loopback HTTP', () => {
-    expect(normalizeAiBaseUrl('https://API.EXAMPLE.COM/v1///')).toBe(
-      'https://api.example.com/v1'
-    )
-    expect(normalizeAiBaseUrl('http://127.0.0.1:11434/v1/')).toBe(
-      'http://127.0.0.1:11434/v1'
-    )
+    expect(normalizeAiBaseUrl('https://API.EXAMPLE.COM/v1///')).toBe('https://api.example.com/v1')
+    expect(normalizeAiBaseUrl('http://127.0.0.1:11434/v1/')).toBe('http://127.0.0.1:11434/v1')
   })
 
   it('rejects remote HTTP, embedded credentials, queries and fragments', () => {

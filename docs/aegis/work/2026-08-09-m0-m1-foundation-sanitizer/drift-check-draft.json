@@ -4,13 +4,14 @@
   "taskIntentRef": "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/task-intent-draft.json",
   "baselineRefs": [
     "docs/aegis/specs/2026-08-09-bid-sentry-design.md",
-    "docs/aegis/plans/2026-08-09-m0-m1-foundation-sanitizer.md"
+    "docs/aegis/adr/ADR-0001-verified-document-publication.md",
+    "docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md"
   ],
-  "scopeStatus": "Task 9 completes only the planned M1 sanitizer and AI settings Renderer; no OCR, M2, M3, server, database, telemetry, or updater",
-  "compatStatus": "Renderer revalidates shared schemas, never receives paths or saved API keys, preserves active tasks across navigation, requires explicit preview confirmation, and displays completion only for same-task passed verification",
-  "retirementStatus": "Task 1 placeholder UI was replaced; no fallback, duplicate completion owner, second writer, or stale conditional-unmount path remains",
+  "scopeStatus": "Task 10 only adds M1 E2E, CI, packaging, package audit, open-source docs and release evidence; no OCR, M2, M3, server, database, telemetry or updater",
+  "compatStatus": "Windows/Linux x64 and DOCX/PDF boundaries remain; production packages exclude E2E/private/test artifacts; sandboxed bundled CJS Preload is baseline-synced in ADR-0002; original-file and verified-publication invariants unchanged",
+  "retirementStatus": "Failed ESM/externalized preload paths are retired without fallback; E2E harness is test-build-only; app-builder-lib @electron/get override has an explicit upstream retirement trigger; no second writer or verification bypass",
   "newRiskSignals": [
-    "Electron E2E, observed 1024x720 layout, Linux packaging, and Windows host evidence remain Task 10 gates"
+    "Windows-host full E2E, NSIS/portable generation, ASAR audit and packaged startup await GitHub Actions"
   ],
-  "decision": "continue"
+  "decision": "needs-verification"
 }

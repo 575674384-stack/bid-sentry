@@ -264,3 +264,25 @@
 - task9-review-gate
 - Blocked on: none
 - Next step: 提交 Task 9 后实现只在 BID_SENTRY_E2E=1 生效的测试注入与 Electron Playwright 路径
+
+## Checkpoint Update
+
+- Current todo: Task 10 等待 Windows/Linux GitHub Actions 与发布证据
+- Active slice: 提交并推送 Task 10，等待 GitHub Actions 两平台 E2E/安装包通过后记录最终证据并发布 v0.1.0
+- Completed todos:
+- Task 1-9 全部实现并通过各自质量门
+- Task 10 本地实现、全量测试、Linux 打包、双 ASAR 审计、生产包启动与独立复审
+- Evidence refs:
+- task10-local-quality-gate
+- task10-review-gate
+- Blocked on: Windows-host GitHub Actions 尚未运行
+- Next step: 提交 Task 10 工作树并推送 main；等待 Linux/Windows CI 通过，下载 CI 安装包并核验后更新最终 evidence
+
+## DriftCheckDraft
+
+- Scope status: Task 10 only adds M1 E2E, CI, packaging, package audit, open-source docs and release evidence; no OCR, M2, M3, server, database, telemetry or updater
+- Compatibility status: Windows/Linux x64 and DOCX/PDF boundaries remain; production packages exclude E2E/private/test artifacts; sandboxed bundled CJS Preload is baseline-synced in ADR-0002; original-file and verified-publication invariants unchanged
+- Retirement status: Failed ESM/externalized preload paths are retired without fallback; E2E harness is test-build-only; app-builder-lib @electron/get override has an explicit upstream retirement trigger; no second writer or verification bypass
+- New risk signals:
+- Windows-host full E2E, NSIS/portable generation, ASAR audit and packaged startup await GitHub Actions
+- Advisory decision: needs-verification
