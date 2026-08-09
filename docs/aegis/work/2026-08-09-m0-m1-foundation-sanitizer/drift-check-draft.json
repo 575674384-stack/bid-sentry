@@ -8,9 +8,9 @@
     "docs/aegis/adr/ADR-0001-verified-document-publication.md",
     "docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md"
   ],
-  "scopeStatus": "Task 10 Windows-host E2E 测试路径生产者修复；仅 canonicalize 测试根目录，不修改生产路径、M2/M3/OCR 或用户文件",
-  "compatStatus": "Windows/Linux x64；E2E 全部从 canonical root 派生输入、输出、用户数据与 reveal log，生产 containment 与 exact identity 守卫保持不变",
-  "retirementStatus": "无新增 fallback、平台特判或第二 owner；未 canonical 化的 E2E root 生产路径被原位替换",
+  "scopeStatus": "Task 10 Windows-host 包审计路径修复；仅分离审计策略路径与 ASAR 原生提取路径，不修改生产应用、M2/M3/OCR 或用户文件",
+  "compatStatus": "Windows/Linux x64；ASAR 条目继续统一规范化执行白名单/敏感标记策略，同时以去根原生路径调用 extractFile",
+  "retirementStatus": "无跳过扫描、fallback、平台特判或第二审计 owner；错误复用规范化路径的调用被原位替换",
   "newRiskSignals": [
     "仅新 Windows/Linux CI 与最终 artifacts 未完成"
   ],

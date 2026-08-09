@@ -378,3 +378,27 @@
 - New risk signals:
 - 仅新 Windows/Linux CI 与最终 artifacts 未完成
 - Advisory decision: needs-verification
+
+## Checkpoint Update
+
+- Current todo: 推送 Windows ASAR native path 修复并重跑双平台 CI
+- Active slice: Task 10 Windows-host ASAR native extraction path 修复与 CI 复验
+- Completed todos:
+- exact identity 修复已提交并推送为 bdbbbc2
+- Windows canonical workspace 与 E2E root 修复已分别提交为 c6958e3、42bc646；Windows Vitest/junction/E2E/package 通过
+- Windows ASAR 审计原生分隔符缺口已在审计 owner 最小修复；本地双 ASAR 与完整门通过
+- Evidence refs:
+- task10-windows-canonical-path-repair-gate
+- task10-windows-e2e-root-repair-gate
+- task10-windows-asar-path-repair-gate
+- Blocked on: 最终 Windows x64 ASAR、packaged startup 和 artifacts 仍需新 CI
+- Next step: 精确提交审计脚本和 Aegis 记录，推送 main，等待新 Linux/Windows CI
+
+## DriftCheckDraft
+
+- Scope status: Task 10 Windows-host 包审计路径修复；仅分离审计策略路径与 ASAR 原生提取路径，不修改生产应用、M2/M3/OCR 或用户文件
+- Compatibility status: Windows/Linux x64；ASAR 条目继续统一规范化执行白名单/敏感标记策略，同时以去根原生路径调用 extractFile
+- Retirement status: 无跳过扫描、fallback、平台特判或第二审计 owner；错误复用规范化路径的调用被原位替换
+- New risk signals:
+- 仅新 Windows/Linux CI 与最终 artifacts 未完成
+- Advisory decision: needs-verification

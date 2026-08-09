@@ -153,3 +153,11 @@ No evidence has been recorded yet.
 - Source: GitHub Actions run 31327100073 Windows E2E log; local Electron Playwright; full local format/lint/typecheck/17-file Vitest/build
 - Summary: Windows Vitest and junction regression passed, then the real Electron result-flow E2E revealed that the E2E root producer retained a Windows temp-directory alias while Main returned canonical result paths. Canonicalized the E2E root immediately after mkdtemp; production containment checks remained strict. Local 4 Electron E2E passed, packaged-only skipped as expected, and full local 17 files/131 tests plus build passed. Final Windows rerun remains required.
 - Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task10-windows-asar-path-repair-gate
+- Type: automated-debugging-verification
+- Source: GitHub Actions run 31327357904 Windows package/audit log; local package audit; full local format/lint/typecheck/17-file Vitest/build
+- Summary: Windows Vitest, junction, Electron E2E and NSIS/portable packaging passed, then package audit failed because listPackage native backslash paths were normalized for policy comparison and incorrectly reused as extractFile API paths. The audit owner now keeps normalized policy paths separate from root-stripped native extraction paths; no content scan is skipped. Local Linux and Windows ASAR scans passed together, plus full local 17 files/131 tests and build. Final Windows rerun remains required.
+- Verifier: root coordinator

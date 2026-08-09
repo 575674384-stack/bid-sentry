@@ -20,6 +20,7 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task1-quality-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-local-quality-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-review-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-windows-asar-path-repair-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-windows-canonical-path-repair-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-windows-e2e-root-repair-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-workspace-identity-focused-gate.json
@@ -39,7 +40,7 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 
 ## Drift Check
 
-- Scope status: Task 10 Windows-host E2E 测试路径生产者修复；仅 canonicalize 测试根目录，不修改生产路径、M2/M3/OCR 或用户文件
-- Compatibility status: Windows/Linux x64；E2E 全部从 canonical root 派生输入、输出、用户数据与 reveal log，生产 containment 与 exact identity 守卫保持不变
-- Retirement status: 无新增 fallback、平台特判或第二 owner；未 canonical 化的 E2E root 生产路径被原位替换
+- Scope status: Task 10 Windows-host 包审计路径修复；仅分离审计策略路径与 ASAR 原生提取路径，不修改生产应用、M2/M3/OCR 或用户文件
+- Compatibility status: Windows/Linux x64；ASAR 条目继续统一规范化执行白名单/敏感标记策略，同时以去根原生路径调用 extractFile
+- Retirement status: 无跳过扫描、fallback、平台特判或第二审计 owner；错误复用规范化路径的调用被原位替换
 - Advisory decision: needs-verification

@@ -71,9 +71,12 @@ async function findAppArchives(directory) {
 }
 
 function auditArchive(archivePath) {
-  const rawEntries = listPackage(archivePath, { isPack: false })
-  const entries = rawEntries.map(normalizeArchivePath)
-  const entrySet = new Set(entries)
+  const entries = listPackage(archivePath, { isPack: false }).map((archiveEntry) => ({
+    extractionPath: archiveEntry.replace(/^[/\\]+/u, ''),
+    normalizedPath: normalizeArchivePath(archiveEntry)
+  }))
+  const normalizedEntries = entries.map((entry) => entry.normalizedPath)
+  const entrySet = new Set(normalizedEntries)
 
   const missingEntries = requiredEntries.filter((entry) => !entrySet.has(entry))
   if (missingEntries.length > 0) {
@@ -82,7 +85,7 @@ function auditArchive(archivePath) {
     )
   }
 
-  const forbiddenEntries = entries.filter((entry) =>
+  const forbiddenEntries = normalizedEntries.filter((entry) =>
     forbiddenPathPatterns.some((pattern) => pattern.test(entry))
   )
   if (forbiddenEntries.length > 0) {
@@ -92,13 +95,18 @@ function auditArchive(archivePath) {
   }
 
   for (const entry of entries) {
-    if (!entry.startsWith('out/') || !textExtensions.has(extname(entry).toLowerCase())) continue
+    if (
+      !entry.normalizedPath.startsWith('out/') ||
+      !textExtensions.has(extname(entry.normalizedPath).toLowerCase())
+    ) {
+      continue
+    }
 
-    const contents = extractFile(archivePath, entry)
+    const contents = extractFile(archivePath, entry.extractionPath)
     for (const marker of forbiddenContentMarkers) {
       if (contents.includes(Buffer.from(marker))) {
         throw new Error(
-          `${relative(process.cwd(), archivePath)} contains forbidden production marker in ${entry}`
+          `${relative(process.cwd(), archivePath)} contains forbidden production marker in ${entry.normalizedPath}`
         )
       }
     }
