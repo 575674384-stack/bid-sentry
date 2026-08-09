@@ -80,6 +80,16 @@ export class TaskRandomMapping {
     return generated
   }
 
+  enumValue(originalValue: string, allowedValues: readonly string[]): string {
+    const candidates = [...new Set(allowedValues)].filter((value) => value !== originalValue)
+    if (candidates.length === 0 || candidates.some((value) => value.length === 0)) {
+      throw new RangeError('随机枚举范围无效。')
+    }
+    return this.mapString(`enum:${allowedValues.join('|')}`, originalValue, () => {
+      return candidates[randomInt(0, candidates.length)]!
+    })
+  }
+
   timestamp(originalValue: string): string {
     return this.mapString('timestamp', originalValue, () => this.randomPastTimestamp())
   }

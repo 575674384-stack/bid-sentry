@@ -24,10 +24,12 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task5-random-report-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task6-docx-quality-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task6-docx-review-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task7-pdf-quality-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task7-pdf-review-gate.json
 
 ## Drift Check
 
-- Scope status: Task 6 完成 DOCX 安全适配器，下一切片仅进入计划内 Task 7 PDF；未进入 M2/M3/OCR
-- Compatibility status: DOCX 原文件只读、批准字段随机化、签名/DOCM/危险包拒绝、内容验证后落盘；跨进程契约边界未提前接线
-- Retirement status: 无旧路径、并行写入器或 fallback；宽松 ZIP/OPC 行为已替换且回归覆盖
+- Scope status: Task 7 完成 PDF 元数据安全重置与结构验证；下一切片仅进入计划内 Task 8，未进入 M2/M3/OCR
+- Compatibility status: PDF Info/XMP/Trailer ID 随机化；扫描 PDF 可清洗；签名/加密/损坏拒绝；页面/资源/注释/附件指纹通过后才可发布
+- Retirement status: DOCX 私有 XML 与临时输出守卫已 delete-first 迁至公共单一 owner；无并行 PDF 写入器、fallback 或跳过验证路径
 - Advisory decision: continue

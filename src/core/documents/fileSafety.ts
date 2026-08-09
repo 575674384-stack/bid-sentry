@@ -187,6 +187,29 @@ export async function assertOutputAvailable(outputPath: string): Promise<void> {
   }
 }
 
+export async function assertSafeTemporaryOutput(
+  inputPath: string,
+  outputPath: string
+): Promise<void> {
+  if (resolve(inputPath) === resolve(outputPath)) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  const [inputInfo, outputInfo] = await Promise.all([lstat(inputPath), lstat(outputPath)]).catch(
+    (error: unknown) => {
+      throw new DocumentSafetyError('INTERNAL_ERROR', error)
+    }
+  )
+  if (
+    !inputInfo.isFile() ||
+    inputInfo.isSymbolicLink() ||
+    !outputInfo.isFile() ||
+    outputInfo.isSymbolicLink() ||
+    (inputInfo.dev === outputInfo.dev && inputInfo.ino === outputInfo.ino)
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+}
+
 export async function finalizeVerifiedOutput(options: {
   workspace: TemporaryWorkspace
   input: InputSnapshot

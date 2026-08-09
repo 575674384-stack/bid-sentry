@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task7-pdf-review-gate",
+  "type": "advisory-code-review",
+  "source": "three findings-first read-only reviews; focused compatibility probes and regressions",
+  "summary": "最终复核为 0 Critical/Important/Minor；关闭合法 XMP Filter 数组误拒、ByteRange 文本误报、无过滤 DecodeParms 静默降级、Type Sig 覆盖与安全原因缺口",
+  "verifier": "root coordinator and task6_code_review"
+}

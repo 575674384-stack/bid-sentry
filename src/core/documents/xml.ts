@@ -1,6 +1,6 @@
 import { DOMParser, onWarningStopParsing } from '@xmldom/xmldom'
 import type { Document as XmlDocument } from '@xmldom/xmldom'
-import { DocumentSafetyError } from '../fileSafety'
+import { DocumentSafetyError } from './fileSafety'
 
 export function parseStrictXml(contents: Buffer): XmlDocument {
   try {

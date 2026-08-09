@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task7-pdf-quality-gate",
+  "type": "automated-verification",
+  "source": "pdfSanitizer.test.ts; owner-retirement checks; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build; task-scoped Prettier; git diff --check",
+  "summary": "10 个 PDF 集成测试与 59 个全仓测试通过；lint/typecheck/build/Task 7 格式/补丁检查通过；签名加密拒绝、Info/XMP/Trailer ID 随机化、结构指纹和失败阻断边界有效",
+  "verifier": "root coordinator"
+}

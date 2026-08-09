@@ -4,7 +4,7 @@ import type { DocumentInspection } from '../documentAdapter'
 import { DocumentSafetyError } from '../fileSafety'
 import { archiveEntryMap, type DocxArchive, type DocxArchiveEntry } from './archive'
 import { scanDocxMetadata } from './metadata'
-import { parseStrictXml } from './xml'
+import { parseStrictXml } from '../xml'
 
 const WORD_MAIN_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'

@@ -185,3 +185,37 @@
 - New risk signals:
 - 全仓 Prettier 检查仍报告 6 个未被 Task 6 修改的历史文件；Task 6 定向格式检查通过
 - Advisory decision: continue
+
+## Checkpoint Update
+
+- Current todo: Task 8 实现清洗任务编排、Worker 和 IPC
+- Active slice: Task 8：预览/执行编排、Utility Process、任务状态与 IPC
+- Completed todos:
+- Task 1 建立可构建的 Electron 安全骨架
+- Task 2 定义版本化共享契约与错误模型
+- Task 3 实现设置、安全密钥与 AI 连接测试
+- Task 4 实现输入快照、路径安全与原子输出
+- Task 5 实现随机映射和脱敏报告
+- Task 6 实现 DOCX 安全适配器
+- Task 7 实现 PDF 安全适配器
+- Evidence refs:
+- task1-quality-gate
+- task2-contract-gate
+- task3-settings-security-gate
+- task4-file-safety-gate
+- task5-random-report-gate
+- task6-docx-review-gate
+- task6-docx-quality-gate
+- task7-pdf-review-gate
+- task7-pdf-quality-gate
+- Blocked on: none
+- Next step: 按计划实现 sanitizeJob 的 preview/execute，再接线 Worker、TaskManager 和 IPC
+
+## DriftCheckDraft
+
+- Scope status: Task 7 完成 PDF 元数据安全重置与结构验证；下一切片仅进入计划内 Task 8，未进入 M2/M3/OCR
+- Compatibility status: PDF Info/XMP/Trailer ID 随机化；扫描 PDF 可清洗；签名/加密/损坏拒绝；页面/资源/注释/附件指纹通过后才可发布
+- Retirement status: DOCX 私有 XML 与临时输出守卫已 delete-first 迁至公共单一 owner；无并行 PDF 写入器、fallback 或跳过验证路径
+- New risk signals:
+- 主流 PDF 阅读器与合法脱敏真实样例兼容性仍需 Task 10 手工证据
+- Advisory decision: continue

@@ -57,3 +57,19 @@ No evidence has been recorded yet.
 - Source: docxSanitizer.test.ts; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build; task-scoped Prettier; git diff --check
 - Summary: 8 个 DOCX 集成测试与 49 个全仓测试通过；lint/typecheck/build/Task 6 格式与补丁检查通过；严格 ZIP/OPC/XML、随机元数据、身份一致性和内容指纹边界有效
 - Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task7-pdf-review-gate
+- Type: advisory-code-review
+- Source: three findings-first read-only reviews; focused compatibility probes and regressions
+- Summary: 最终复核为 0 Critical/Important/Minor；关闭合法 XMP Filter 数组误拒、ByteRange 文本误报、无过滤 DecodeParms 静默降级、Type Sig 覆盖与安全原因缺口
+- Verifier: root coordinator and task6_code_review
+
+## EvidenceBundleDraft
+
+- Artifact key: task7-pdf-quality-gate
+- Type: automated-verification
+- Source: pdfSanitizer.test.ts; owner-retirement checks; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build; task-scoped Prettier; git diff --check
+- Summary: 10 个 PDF 集成测试与 59 个全仓测试通过；lint/typecheck/build/Task 7 格式/补丁检查通过；签名加密拒绝、Info/XMP/Trailer ID 随机化、结构指纹和失败阻断边界有效
+- Verifier: root coordinator

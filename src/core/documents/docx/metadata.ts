@@ -14,7 +14,7 @@ import {
   type CustomIntegerBounds
 } from './customPropertyIntegers'
 import { isWordIdentityElement } from './wordIdentityPolicy'
-import { parseStrictXml } from './xml'
+import { parseStrictXml } from '../xml'
 
 const CORE_NS = 'http://schemas.openxmlformats.org/package/2006/metadata/core-properties'
 const DC_NS = 'http://purl.org/dc/elements/1.1/'
