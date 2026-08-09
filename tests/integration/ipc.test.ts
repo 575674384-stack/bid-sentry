@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -22,6 +22,7 @@ import {
 } from '../../src/shared/contracts'
 import { writeDocxFixture } from '../fixtures/builders/docxFixture'
 import { writeExecutionResultFixture } from '../fixtures/builders/executionResultFixture'
+import { resolvePathIdentityWithoutSymbolicLinks } from '../../src/core/documents/pathSafety'
 
 const REQUEST_ID = '423e4567-e89b-42d3-a456-426614174000'
 const temporaryDirectories: string[] = []
@@ -111,6 +112,16 @@ describe('versioned IPC and path capabilities', () => {
       throw new Error('Missing execute request')
     }
     expect(executeRequest.outputDirectory).toBe(harness.outputDirectory)
+    expect(executeRequest.workspaceRootIdentity).toMatchObject({
+      device: expect.stringMatching(/^\d+$/u),
+      inode: expect.stringMatching(/^\d+$/u),
+      mode: expect.stringMatching(/^\d+$/u)
+    })
+    expect(executeRequest.outputDirectoryIdentity).toMatchObject({
+      device: expect.stringMatching(/^\d+$/u),
+      inode: expect.stringMatching(/^\d+$/u),
+      mode: expect.stringMatching(/^\d+$/u)
+    })
     const result = await writeExecutionResultFixture({
       taskId,
       inputSha256: previewRequest.inputs[0]?.snapshot.sha256 as string,
@@ -205,16 +216,28 @@ async function createHarness(): Promise<{
   temporaryDirectories.push(directory)
   const inputPath = join(directory, 'input.docx')
   const outputDirectory = join(directory, 'output')
-  const workspaceRootPath = join(outputDirectory, '.bid-sentry-tmp-runtime')
   await writeDocxFixture(inputPath)
   await import('node:fs/promises').then(({ mkdir }) => mkdir(outputDirectory))
+  const canonicalInputPath = await realpath(inputPath)
+  const canonicalOutputDirectory = await realpath(outputDirectory)
+  const workspaceRootPath = join(canonicalOutputDirectory, '.bid-sentry-tmp-runtime')
   const ipc = new FakeIpcMain()
   const worker = new FakeWorker()
   const manager = new TaskManager(() => worker, {
-    createWorkspace: async () => ({
-      rootPath: workspaceRootPath,
-      outputDirectory
-    }),
+    createWorkspace: async (selectedOutputDirectory) => {
+      const rootPath = join(selectedOutputDirectory, '.bid-sentry-tmp-runtime')
+      await import('node:fs/promises').then(({ mkdir }) => mkdir(rootPath))
+      const [root, output] = await Promise.all([
+        resolvePathIdentityWithoutSymbolicLinks(rootPath),
+        resolvePathIdentityWithoutSymbolicLinks(selectedOutputDirectory)
+      ])
+      return {
+        rootPath: root.canonicalPath,
+        outputDirectory: output.canonicalPath,
+        rootIdentity: root.identity,
+        outputDirectoryIdentity: output.identity
+      }
+    },
     cleanupWorkspace: async () => undefined
   })
   const settingsService = new SettingsService(
@@ -234,8 +257,8 @@ async function createHarness(): Promise<{
   return {
     ipc,
     worker,
-    inputPath,
-    outputDirectory,
+    inputPath: canonicalInputPath,
+    outputDirectory: canonicalOutputDirectory,
     workspaceRootPath,
     shownPaths,
     senders: ipc.senders,

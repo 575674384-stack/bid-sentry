@@ -24,8 +24,8 @@
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "test:e2e": "pnpm build:e2e && cross-env PLAYWRIGHT_HTML_OPEN=never playwright test",
     "test:e2e:packaged": "cross-env PLAYWRIGHT_HTML_OPEN=never playwright test -g \"launches the packaged production app\"",
-    "package:win": "pnpm build && electron-builder --win --x64",
-    "package:linux": "pnpm build && electron-builder --linux --x64",
+    "package:win": "pnpm build && electron-builder --win --x64 --publish never",
+    "package:linux": "pnpm build && electron-builder --linux --x64 --publish never",
     "audit:package": "node scripts/audit-package.mjs",
     "format:check": "prettier --check ."
   },

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { InputSnapshotSchema } from './documents'
+import { FileSystemIdentitySchema, InputSnapshotSchema } from './documents'
 import { AppErrorSchema } from './errors'
 import {
   SanitizationPreviewSchema,
@@ -35,12 +35,16 @@ export const WorkerExecuteRequestSchema = z
     planDigest: z.string().regex(/^[a-f0-9]{64}$/u),
     outputDirectory: z.string().min(1),
     workspaceRootPath: z.string().min(1),
+    workspaceRootIdentity: FileSystemIdentitySchema,
+    outputDirectoryIdentity: FileSystemIdentitySchema,
     appVersion: z.string().trim().min(1).max(100)
   })
   .strict()
 
 export const TaskExecutionRequestSchema = WorkerExecuteRequestSchema.omit({
-  workspaceRootPath: true
+  workspaceRootPath: true,
+  workspaceRootIdentity: true,
+  outputDirectoryIdentity: true
 })
 
 export const WorkerCancelRequestSchema = z

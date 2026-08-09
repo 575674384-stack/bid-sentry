@@ -2,6 +2,25 @@ import { z } from 'zod'
 
 export const DocumentTypeSchema = z.enum(['docx', 'pdf'])
 
+const DecimalFileSystemValueSchema = z.string().regex(/^(?:0|[1-9]\d*)$/u)
+
+export const FileSystemIdentitySchema = z
+  .object({
+    device: DecimalFileSystemValueSchema,
+    inode: DecimalFileSystemValueSchema,
+    mode: DecimalFileSystemValueSchema
+  })
+  .strict()
+
+export const TemporaryWorkspaceDescriptorSchema = z
+  .object({
+    rootPath: z.string().min(1),
+    outputDirectory: z.string().min(1),
+    rootIdentity: FileSystemIdentitySchema,
+    outputDirectoryIdentity: FileSystemIdentitySchema
+  })
+  .strict()
+
 export const InputSnapshotSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -58,6 +77,8 @@ export const MetadataFieldDescriptorSchema = z
   .strict()
 
 export type DocumentType = z.infer<typeof DocumentTypeSchema>
+export type FileSystemIdentity = z.infer<typeof FileSystemIdentitySchema>
+export type TemporaryWorkspaceDescriptor = z.infer<typeof TemporaryWorkspaceDescriptorSchema>
 export type InputSnapshot = z.infer<typeof InputSnapshotSchema>
 export type ReportFileIdentity = z.infer<typeof ReportFileIdentitySchema>
 export type MetadataFieldCategory = z.infer<typeof MetadataFieldCategorySchema>

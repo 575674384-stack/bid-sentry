@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import type {
   DocumentType,
+  FileSystemIdentity,
   InputSnapshot,
   SanitizationPreview,
   TaskProgress,
@@ -167,6 +168,8 @@ export class SanitizationJob {
       planDigest: string
       outputDirectory: string
       workspaceRootPath?: string
+      workspaceRootIdentity?: FileSystemIdentity
+      outputDirectoryIdentity?: FileSystemIdentity
       appVersion: string
     },
     signal: AbortSignal,
@@ -192,19 +195,32 @@ export class SanitizationJob {
     stored.executing = true
     const startedAt = this.#now().toISOString()
     const publishedFiles: PublishedFile[] = []
+    const hasCallerWorkspace = Boolean(request.workspaceRootPath)
+    if (
+      hasCallerWorkspace !== Boolean(request.workspaceRootIdentity) ||
+      hasCallerWorkspace !== Boolean(request.outputDirectoryIdentity)
+    ) {
+      throw new DocumentSafetyError('INTERNAL_ERROR')
+    }
     const workspace = request.workspaceRootPath
-      ? await adoptTemporaryWorkspace(request.workspaceRootPath, request.outputDirectory)
+      ? await adoptTemporaryWorkspace({
+          rootPath: request.workspaceRootPath,
+          outputDirectory: request.outputDirectory,
+          rootIdentity: request.workspaceRootIdentity as FileSystemIdentity,
+          outputDirectoryIdentity: request.outputDirectoryIdentity as FileSystemIdentity
+        })
       : await createTemporaryWorkspace(request.outputDirectory)
     const cleanupOwnedByCaller = Boolean(request.workspaceRootPath)
+    const outputDirectory = workspace.outputDirectory
     let workspaceCleaned = false
 
     try {
       assertNotAborted(signal)
       const outputPaths = stored.plannedFiles.map((file) =>
-        buildSanitizedOutputPath(file.snapshot.absolutePath, request.outputDirectory)
+        buildSanitizedOutputPath(file.snapshot.absolutePath, outputDirectory)
       )
       assertUniqueOutputPaths(outputPaths)
-      const reportPaths = buildReportPaths(request.taskId, request.outputDirectory)
+      const reportPaths = buildReportPaths(request.taskId, outputDirectory)
       await Promise.all(
         [...outputPaths, reportPaths.json, reportPaths.html].map(assertOutputAvailable)
       )

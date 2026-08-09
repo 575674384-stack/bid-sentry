@@ -3,10 +3,12 @@ import {
   AiSettingsSchema,
   AiSettingsUpdateSchema,
   AppErrorSchema,
+  FileSystemIdentitySchema,
   IpcRequestEnvelopeSchema,
   SanitizationReportSchema,
   SanitizationTaskResultSchema,
   TaskProgressSchema,
+  TaskExecutionRequestSchema,
   VerificationReportSchema,
   WorkerRequestSchema,
   WorkerResponseSchema,
@@ -122,6 +124,41 @@ describe('task completion invariants', () => {
 })
 
 describe('strict report and IPC contracts', () => {
+  it('requires decimal filesystem identities only on Main-to-Worker execution', () => {
+    const identity = FileSystemIdentitySchema.parse({
+      device: '2049',
+      inode: '12345678901234567890',
+      mode: '16832'
+    })
+    const taskRequest = {
+      schemaVersion: 1 as const,
+      type: 'execute' as const,
+      taskId: TASK_ID,
+      planDigest: 'c'.repeat(64),
+      outputDirectory: '/safe/output',
+      appVersion: '0.1.0'
+    }
+    const workerRequest = {
+      ...taskRequest,
+      workspaceRootPath: '/safe/output/.bid-sentry-tmp-test',
+      workspaceRootIdentity: identity,
+      outputDirectoryIdentity: identity
+    }
+
+    expect(WorkerRequestSchema.safeParse(workerRequest).success).toBe(true)
+    expect(
+      WorkerRequestSchema.safeParse({
+        ...taskRequest,
+        workspaceRootPath: '/safe/output/.bid-sentry-tmp-test'
+      }).success
+    ).toBe(false)
+    expect(TaskExecutionRequestSchema.safeParse(taskRequest).success).toBe(true)
+    expect(TaskExecutionRequestSchema.safeParse(workerRequest).success).toBe(false)
+    expect(FileSystemIdentitySchema.safeParse({ ...identity, inode: 12 }).success).toBe(false)
+    expect(FileSystemIdentitySchema.safeParse({ ...identity, mode: '016832' }).success).toBe(false)
+    expect(FileSystemIdentitySchema.safeParse({ ...identity, extra: 'nope' }).success).toBe(false)
+  })
+
   it('rejects sensitive metadata values and unknown fields from reports', () => {
     const report = {
       schemaVersion: 1,

@@ -56,8 +56,10 @@ describe('Main execution artifact validation', () => {
       {
         taskId,
         planDigest: preview.planDigest,
-        outputDirectory,
+        outputDirectory: workspace.outputDirectory,
         workspaceRootPath: workspace.rootPath,
+        workspaceRootIdentity: workspace.rootIdentity,
+        outputDirectoryIdentity: workspace.outputDirectoryIdentity,
         appVersion: '0.1.0'
       },
       new AbortController().signal
@@ -90,7 +92,9 @@ describe('Main execution artifact validation', () => {
     })
 
     expect(published).toHaveLength(3)
-    expect(new Set(published.map((file) => `${file.device}:${file.inode}`)).size).toBe(3)
+    expect(
+      new Set(published.map((file) => `${file.identity.device}:${file.identity.inode}`)).size
+    ).toBe(3)
   })
 
   it('rejects a hash mismatch and rolls back the other verified artifacts', async () => {

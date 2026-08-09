@@ -209,15 +209,18 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
         command.outputDirectoryId
       )
       try {
-        const result = await dependencies.taskManager.execute({
-          schemaVersion: 1,
-          type: 'execute',
-          taskId: command.taskId,
-          planDigest: command.planDigest,
-          outputDirectory,
-          appVersion: dependencies.appVersion
-        })
-        return registry.registerTaskResult(event.sender.id, outputDirectory, result)
+        const result = await dependencies.taskManager.execute(
+          {
+            schemaVersion: 1,
+            type: 'execute',
+            taskId: command.taskId,
+            planDigest: command.planDigest,
+            outputDirectory: outputDirectory.absolutePath,
+            appVersion: dependencies.appVersion
+          },
+          outputDirectory.identity
+        )
+        return registry.registerTaskResult(event.sender.id, outputDirectory.absolutePath, result)
       } finally {
         taskOwners.delete(command.taskId)
       }

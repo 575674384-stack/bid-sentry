@@ -121,3 +121,19 @@ No evidence has been recorded yet.
 - Source: findings-first working-tree review; current baseline and ADR review; final diff inspection
 - Summary: 最终独立复审 0 Critical/Important/Minor；已关闭 Windows 完整 E2E、NSIS/portable 名称冲突、sandboxed bundled CJS Preload ADR/基线、transitive override retirement 和预发布文案缺口。残余仅为待执行 Windows-host CI 与真实安装器证据。
 - Verifier: root coordinator and task6_code_review
+
+## EvidenceBundleDraft
+
+- Artifact key: task10-workspace-identity-focused-gate
+- Type: automated-verification
+- Source: pathSafety/fileSafety/workspaceJournal/contracts/workerRuntime/taskManager/ipc focused Vitest; pnpm typecheck
+- Summary: 7 files: 57 passed, 1 Windows-only junction skipped on Linux; Node/Web typecheck passed. Covers creation identity transport, same-name replacement preservation, legacy journal quarantine, Worker missing-identity rejection, adopt mismatch, and selected output identity replacement.
+- Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task10-workspace-identity-full-gate
+- Type: automated-and-advisory-verification
+- Source: Prettier; ESLint; Node/Web typecheck; 17-file Vitest; production build; Electron E2E; Linux package and ASAR audit; packaged startup; production audit; findings-first re-review
+- Summary: After exact bigint artifact identity repair: 17 files/131 passed, 1 Windows-only skipped on Linux; format/lint/typecheck/build passed; 4 Electron E2E passed; Linux AppImage/deb generated; final Linux ASAR audit and packaged production startup passed; production dependencies have no known vulnerabilities; independent re-review found no Critical/Important. Windows-host evidence remains pending.
+- Verifier: root coordinator and task6_code_review

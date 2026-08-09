@@ -2,16 +2,19 @@
   "schemaVersion": "aegis.schema.v0",
   "baselineRefs": [
     "docs/aegis/specs/2026-08-09-bid-sentry-design.md",
+    "docs/aegis/plans/2026-08-09-m0-m1-foundation-sanitizer.md",
     "docs/aegis/adr/ADR-0001-verified-document-publication.md",
     "docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md"
   ],
   "impactStatement": "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/impact-statement-draft.json",
   "compatPlan": "Windows/Linux x64；DOCX/PDF；无 OCR/服务端/数据库",
-  "retirementPlan": "Failed ESM/externalized preload paths are retired without fallback; E2E harness is test-build-only; app-builder-lib @electron/get override has an explicit upstream retirement trigger; no second writer or verification bypass",
+  "retirementPlan": "path-only cleanup、legacy path-only journal 和 number inode 比较均 delete-first 退休，无 fallback",
   "evidenceBundle": [
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task1-quality-gate.json",
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-local-quality-gate.json",
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-review-gate.json",
+    "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-workspace-identity-focused-gate.json",
+    "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-workspace-identity-full-gate.json",
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task2-contract-gate.json",
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task3-settings-security-gate.json",
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task4-file-safety-gate.json",

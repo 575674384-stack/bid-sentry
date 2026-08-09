@@ -1,17 +1,19 @@
 import { randomUUID } from 'node:crypto'
-import { lstat, realpath } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import {
   SanitizationTaskResultSchema,
   SelectedInputFilesSchema,
   SelectedOutputDirectorySchema,
   type InputSnapshot,
+  type FileSystemIdentity,
   type SanitizationTaskResult,
   type SelectedInputFiles,
   type SelectedOutputDirectory,
   type WorkerExecutionResult
 } from '../../shared/contracts'
-import { DocumentSafetyError, normalizeFileIdentity } from '../../core/documents/fileSafety'
+import { DocumentSafetyError } from '../../core/documents/fileSafety'
+import { resolvePathIdentityWithoutSymbolicLinks } from '../../core/documents/pathSafety'
 
 interface OwnedInput {
   ownerId: number
@@ -21,6 +23,7 @@ interface OwnedInput {
 interface OwnedOutputDirectory {
   ownerId: number
   absolutePath: string
+  identity: FileSystemIdentity
 }
 
 interface OwnedResultFile {
@@ -64,23 +67,25 @@ export class PathRegistry {
     ownerId: number,
     directoryPath: string
   ): Promise<SelectedOutputDirectory> {
-    const absolutePath = resolve(directoryPath)
+    const resolvedDirectory = await resolvePathIdentityWithoutSymbolicLinks(directoryPath).catch(
+      (error: unknown) => {
+        throw new DocumentSafetyError('INVALID_DOCUMENT', error)
+      }
+    )
+    const absolutePath = resolvedDirectory.canonicalPath
     const info = await lstat(absolutePath).catch((error: unknown) => {
       throw new DocumentSafetyError('INVALID_DOCUMENT', error)
     })
-    const canonical = await realpath(absolutePath).catch((error: unknown) => {
-      throw new DocumentSafetyError('INVALID_DOCUMENT', error)
-    })
-    if (
-      !info.isDirectory() ||
-      info.isSymbolicLink() ||
-      normalizeFileIdentity(canonical) !== normalizeFileIdentity(absolutePath)
-    ) {
+    if (!info.isDirectory() || info.isSymbolicLink()) {
       throw new DocumentSafetyError('INVALID_DOCUMENT')
     }
 
     const outputDirectoryId = randomUUID()
-    this.#outputDirectories.set(outputDirectoryId, { ownerId, absolutePath })
+    this.#outputDirectories.set(outputDirectoryId, {
+      ownerId,
+      absolutePath,
+      identity: resolvedDirectory.identity
+    })
     return SelectedOutputDirectorySchema.parse({
       schemaVersion: 1,
       outputDirectoryId,
@@ -88,8 +93,12 @@ export class PathRegistry {
     })
   }
 
-  resolveOutputDirectory(ownerId: number, outputDirectoryId: string): string {
-    return this.#owned(this.#outputDirectories, outputDirectoryId, ownerId).absolutePath
+  resolveOutputDirectory(
+    ownerId: number,
+    outputDirectoryId: string
+  ): { absolutePath: string; identity: FileSystemIdentity } {
+    const entry = this.#owned(this.#outputDirectories, outputDirectoryId, ownerId)
+    return { absolutePath: entry.absolutePath, identity: entry.identity }
   }
 
   registerTaskResult(

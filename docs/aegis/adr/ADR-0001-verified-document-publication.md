@@ -43,3 +43,36 @@ The former Worker-success-immediately-cleans path is retired; there is no fallba
 ## Boundary
 
 This ADR is an advisory Aegis Method Pack record. It does not grant completion authority or replace project-authoritative architecture sources.
+
+## Amendment - 2026-08-09 - Bind publication and cleanup to exact creation-time filesystem identities: Main persists workspace root/output device, inode, and mode as decimal strings; Worker adoption, normal cleanup, crash recovery, Main artifact attestation, and rollback require exact bigint-derived identity matches.
+
+- Status: amended
+
+### Source Evidence
+
+- Focused identity regressions, full 17-file/131-test gate, and independent review found and closed number inode precision loss above Number.MAX_SAFE_INTEGER.
+### Change Summary
+
+Bind publication and cleanup to exact creation-time filesystem identities: Main persists workspace root/output device, inode, and mode as decimal strings; Worker adoption, normal cleanup, crash recovery, Main artifact attestation, and rollback require exact bigint-derived identity matches.
+
+### Compatibility Boundary
+
+Windows/Linux x64; DOCX/PDF inputs remain read-only; replacement files/directories are preserved; no completed state without exact artifact attestation and cleanup.
+
+### Retirement Impact
+
+Path-only workspace cleanup, legacy path-only journal acceptance, and number-based artifact inode comparisons are retired without fallback.
+
+### Baseline Sync
+
+- Needed: needed
+- Target: docs/aegis/specs/2026-08-09-bid-sentry-design.md
+- Action: cite unchanged
+- Reason: The design already requires restricted crash cleanup, Main task lifecycle ownership, local document writer ownership, and verified publication; this amendment records the exact executed identity mechanism without changing those owners or product behavior.
+
+### Evidence References
+
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/90-evidence.md
+### Boundary
+
+This amendment is an advisory Aegis Method Pack record. It does not grant completion authority or replace project-authoritative architecture sources.

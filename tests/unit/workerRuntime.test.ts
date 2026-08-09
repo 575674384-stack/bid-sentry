@@ -48,4 +48,27 @@ describe('SanitizationWorkerRuntime protocol rejection', () => {
       error: { code: 'TASK_NOT_FOUND' }
     })
   })
+
+  it('rejects execute requests that omit creation-time workspace identities', async () => {
+    const messages: WorkerResponse[] = []
+    const runtime = new SanitizationWorkerRuntime({
+      postMessage: (message) => messages.push(message)
+    })
+
+    await runtime.handle({
+      schemaVersion: 1,
+      type: 'execute',
+      taskId: TASK_ID,
+      planDigest: 'c'.repeat(64),
+      outputDirectory: '/safe/output',
+      workspaceRootPath: '/safe/output/.bid-sentry-tmp-test',
+      appVersion: '0.1.0'
+    })
+
+    expect(messages[0]).toMatchObject({
+      type: 'error',
+      taskId: TASK_ID,
+      error: { code: 'INVALID_REQUEST' }
+    })
+  })
 })

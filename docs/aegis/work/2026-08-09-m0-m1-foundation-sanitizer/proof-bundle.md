@@ -20,6 +20,8 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task1-quality-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-local-quality-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-review-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-workspace-identity-focused-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-workspace-identity-full-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task2-contract-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task3-settings-security-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task4-file-safety-gate.json
@@ -35,7 +37,7 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 
 ## Drift Check
 
-- Scope status: Task 10 only adds M1 E2E, CI, packaging, package audit, open-source docs and release evidence; no OCR, M2, M3, server, database, telemetry or updater
-- Compatibility status: Windows/Linux x64 and DOCX/PDF boundaries remain; production packages exclude E2E/private/test artifacts; sandboxed bundled CJS Preload is baseline-synced in ADR-0002; original-file and verified-publication invariants unchanged
-- Retirement status: Failed ESM/externalized preload paths are retired without fallback; E2E harness is test-build-only; app-builder-lib @electron/get override has an explicit upstream retirement trigger; no second writer or verification bypass
+- Scope status: Task 10 M0-M1 发布安全修复和证据；未进入 M2/M3/OCR，也未触碰用户源文件
+- Compatibility status: Windows/Linux x64；exact bigint-derived identity 贯穿 workspace、hard-link attestation 与 rollback；用户替换对象保留
+- Retirement status: path-only cleanup、legacy path-only journal 和 number inode 比较均 delete-first 退休，无 fallback
 - Advisory decision: needs-verification

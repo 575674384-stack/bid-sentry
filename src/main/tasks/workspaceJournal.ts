@@ -3,24 +3,21 @@ import { mkdir, open, rename, unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { z } from 'zod'
 import { cleanupAbandonedTemporaryWorkspace } from '../../core/documents/fileSafety'
-
-const WorkspaceEntrySchema = z
-  .object({
-    rootPath: z.string().min(1),
-    outputDirectory: z.string().min(1)
-  })
-  .strict()
+import {
+  TemporaryWorkspaceDescriptorSchema,
+  type TemporaryWorkspaceDescriptor
+} from '../../shared/contracts'
 
 const WorkspaceJournalSchema = z
   .object({
     schemaVersion: z.literal(1),
-    entries: z.array(WorkspaceEntrySchema).max(100)
+    entries: z.array(TemporaryWorkspaceDescriptorSchema).max(100)
   })
   .strict()
 
 const MAX_JOURNAL_BYTES = 1024 * 1024
 
-export type WorkspaceJournalEntry = z.infer<typeof WorkspaceEntrySchema>
+export type WorkspaceJournalEntry = TemporaryWorkspaceDescriptor
 
 export class WorkspaceJournal {
   #queue: Promise<void> = Promise.resolve()
@@ -28,8 +25,7 @@ export class WorkspaceJournal {
   constructor(
     private readonly journalPath: string,
     private readonly cleanup: (
-      rootPath: string,
-      outputDirectory: string
+      workspace: TemporaryWorkspaceDescriptor
     ) => Promise<void> = cleanupAbandonedTemporaryWorkspace,
     private readonly now: () => number = Date.now
   ) {}
@@ -40,7 +36,7 @@ export class WorkspaceJournal {
       const remaining: WorkspaceJournalEntry[] = []
       for (const entry of entries) {
         try {
-          await this.cleanup(entry.rootPath, entry.outputDirectory)
+          await this.cleanup(entry)
         } catch {
           remaining.push(entry)
         }
@@ -51,7 +47,8 @@ export class WorkspaceJournal {
 
   add(entryInput: WorkspaceJournalEntry): Promise<void> {
     return this.#mutate(async () => {
-      const entry = WorkspaceEntrySchema.parse({
+      const entry = TemporaryWorkspaceDescriptorSchema.parse({
+        ...entryInput,
         rootPath: resolve(entryInput.rootPath),
         outputDirectory: resolve(entryInput.outputDirectory)
       })
@@ -61,11 +58,23 @@ export class WorkspaceJournal {
     })
   }
 
-  remove(rootPath: string): Promise<void> {
+  remove(entryInput: WorkspaceJournalEntry): Promise<void> {
     return this.#mutate(async () => {
-      const resolvedRoot = resolve(rootPath)
+      const entry = TemporaryWorkspaceDescriptorSchema.parse({
+        ...entryInput,
+        rootPath: resolve(entryInput.rootPath),
+        outputDirectory: resolve(entryInput.outputDirectory)
+      })
       const entries = await this.#read()
-      await this.#write(entries.filter((entry) => entry.rootPath !== resolvedRoot))
+      await this.#write(
+        entries.filter(
+          (candidate) =>
+            candidate.rootPath !== entry.rootPath ||
+            candidate.rootIdentity.device !== entry.rootIdentity.device ||
+            candidate.rootIdentity.inode !== entry.rootIdentity.inode ||
+            candidate.rootIdentity.mode !== entry.rootIdentity.mode
+        )
+      )
     })
   }
 

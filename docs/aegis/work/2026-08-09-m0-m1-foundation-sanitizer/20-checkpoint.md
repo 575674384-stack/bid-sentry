@@ -286,3 +286,48 @@
 - New risk signals:
 - Windows-host full E2E, NSIS/portable generation, ASAR audit and packaged startup await GitHub Actions
 - Advisory decision: needs-verification
+
+## Checkpoint Update
+
+- Current todo: 关闭 workspace 创建身份绑定缺口并重新完成 Task 10 发布验证
+- Active slice: Task 10 安全补强：workspace 创建身份契约、Worker、journal 与清理器
+- Completed todos:
+- 实现 canonical path 逐级 symlink/junction 拒绝
+- 贯穿 workspace root/output 创建身份并增加 focused regressions
+- Evidence refs:
+- task10-workspace-identity-focused-gate
+- Blocked on: Windows junction 与最终安装包仍需 Windows CI
+- Next step: 运行全仓 lint/typecheck/Vitest/build 后请求独立复审
+
+## DriftCheckDraft
+
+- Scope status: Task 10 内部临时工作区安全补强；未进入 M2/M3/OCR，也未触碰用户源文件
+- Compatibility status: 未发布 schema v1 原位收紧；Main-to-Worker 与 journal 必须携带 root/output 创建身份；旧 path-only journal 隔离
+- Retirement status: 仅路径清理契约 delete-first 退休，无 fallback 或双 owner
+- New risk signals:
+- Windows junction、inode/mode 稳定性和最终安装包需 Windows CI 直接证据
+- Advisory decision: needs-verification
+
+## Checkpoint Update
+
+- Current todo: 提交并推送 exact identity 修复，等待双平台 CI 与最终发布证据
+- Active slice: Task 10 最终本地发布门完成；准备 Git 提交与 Windows/Linux CI
+- Completed todos:
+- 关闭 workspace 创建身份与 same-path replacement 缺口
+- 关闭 PublishedFile number inode 精度与误回滚缺口
+- 通过最新全仓门、Electron E2E、Linux 打包/审计/启动及独立复审
+- Evidence refs:
+- task10-workspace-identity-focused-gate
+- task10-workspace-identity-full-gate
+- docs/aegis/adr/ADR-0001-verified-document-publication.md
+- Blocked on: Windows junction、Windows E2E、NSIS/portable、Windows ASAR/packaged startup 和最终双平台 artifacts 需 GitHub Actions
+- Next step: 运行最终稳定工作树质量门，按任务路径提交并推送 main，等待 GitHub Actions
+
+## DriftCheckDraft
+
+- Scope status: Task 10 M0-M1 发布安全修复和证据；未进入 M2/M3/OCR，也未触碰用户源文件
+- Compatibility status: Windows/Linux x64；exact bigint-derived identity 贯穿 workspace、hard-link attestation 与 rollback；用户替换对象保留
+- Retirement status: path-only cleanup、legacy path-only journal 和 number inode 比较均 delete-first 退休，无 fallback
+- New risk signals:
+- 仅最终 Windows-host 与双平台 CI/artifact 证据未完成
+- Advisory decision: needs-verification

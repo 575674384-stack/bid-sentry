@@ -66,8 +66,10 @@ describe('SettingsService', () => {
     expect(settingsSource).not.toContain('top-secret-key')
     expect(encryptedSource).not.toBe('top-secret-key')
     expect(await service.getApiKeyForUse()).toBe('top-secret-key')
-    expect((await stat(settingsPath)).mode & 0o777).toBe(0o600)
-    expect((await stat(secretPath)).mode & 0o777).toBe(0o600)
+    if (process.platform !== 'win32') {
+      expect((await stat(settingsPath)).mode & 0o777).toBe(0o600)
+      expect((await stat(secretPath)).mode & 0o777).toBe(0o600)
+    }
   })
 
   it('uses session-only storage when encryption is unavailable', async () => {

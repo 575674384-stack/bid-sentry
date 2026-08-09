@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task10-workspace-identity-full-gate",
+  "type": "automated-and-advisory-verification",
+  "source": "Prettier; ESLint; Node/Web typecheck; 17-file Vitest; production build; Electron E2E; Linux package and ASAR audit; packaged startup; production audit; findings-first re-review",
+  "summary": "After exact bigint artifact identity repair: 17 files/131 passed, 1 Windows-only skipped on Linux; format/lint/typecheck/build passed; 4 Electron E2E passed; Linux AppImage/deb generated; final Linux ASAR audit and packaged production startup passed; production dependencies have no known vulnerabilities; independent re-review found no Critical/Important. Windows-host evidence remains pending.",
+  "verifier": "root coordinator and task6_code_review"
+}

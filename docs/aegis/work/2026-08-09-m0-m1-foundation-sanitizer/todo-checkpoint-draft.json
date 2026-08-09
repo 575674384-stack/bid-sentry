@@ -1,17 +1,19 @@
 {
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
-  "currentTodo": "Task 10 等待 Windows/Linux GitHub Actions 与发布证据",
+  "currentTodo": "提交并推送 exact identity 修复，等待双平台 CI 与最终发布证据",
   "completedTodos": [
-    "Task 1-9 全部实现并通过各自质量门",
-    "Task 10 本地实现、全量测试、Linux 打包、双 ASAR 审计、生产包启动与独立复审"
+    "关闭 workspace 创建身份与 same-path replacement 缺口",
+    "关闭 PublishedFile number inode 精度与误回滚缺口",
+    "通过最新全仓门、Electron E2E、Linux 打包/审计/启动及独立复审"
   ],
-  "activeSlice": "提交并推送 Task 10，等待 GitHub Actions 两平台 E2E/安装包通过后记录最终证据并发布 v0.1.0",
+  "activeSlice": "Task 10 最终本地发布门完成；准备 Git 提交与 Windows/Linux CI",
   "evidenceRefs": [
-    "task10-local-quality-gate",
-    "task10-review-gate"
+    "task10-workspace-identity-focused-gate",
+    "task10-workspace-identity-full-gate",
+    "docs/aegis/adr/ADR-0001-verified-document-publication.md"
   ],
-  "blockedOn": "Windows-host GitHub Actions 尚未运行",
-  "nextStep": "提交 Task 10 工作树并推送 main；等待 Linux/Windows CI 通过，下载 CI 安装包并核验后更新最终 evidence",
+  "blockedOn": "Windows junction、Windows E2E、NSIS/portable、Windows ASAR/packaged startup 和最终双平台 artifacts 需 GitHub Actions",
+  "nextStep": "运行最终稳定工作树质量门，按任务路径提交并推送 main，等待 GitHub Actions",
   "updatedAt": "2026-08-09"
 }

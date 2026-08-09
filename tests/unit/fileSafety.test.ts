@@ -1,5 +1,17 @@
 import { createWriteStream } from 'node:fs'
-import { access, mkdtemp, open, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  unlink,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as yazl from 'yazl'
@@ -7,6 +19,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   MAX_INPUT_BYTES,
   TemporaryWorkspace,
+  adoptTemporaryWorkspace,
   assertInputUnchanged,
   assertOutputAvailable,
   buildSanitizedOutputPath,
@@ -101,6 +114,8 @@ describe('createInputSnapshot', () => {
     expect(docx).toMatchObject({ displayName: 'input.docx', documentType: 'docx' })
     expect(pdf.sha256).toMatch(/^[a-f0-9]{64}$/u)
     expect(docx.sha256).toMatch(/^[a-f0-9]{64}$/u)
+    expect(pdf.absolutePath).toBe(await realpath(pdfPath))
+    expect(docx.absolutePath).toBe(await realpath(docxPath))
   })
 
   it('rejects extension disguises, non-Word ZIP files and unsupported types', async () => {
@@ -134,6 +149,22 @@ describe('createInputSnapshot', () => {
       appError: { code: 'INVALID_DOCUMENT' }
     })
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects regular files reached through a symbolic-link directory',
+    async () => {
+      const directory = await createTemporaryDirectory()
+      const realDirectory = join(directory, 'real')
+      const linkedDirectory = join(directory, 'linked')
+      await mkdir(realDirectory)
+      await writeMinimalPdf(join(realDirectory, 'input.pdf'))
+      await symlink(realDirectory, linkedDirectory, 'dir')
+
+      await expect(createInputSnapshot(join(linkedDirectory, 'input.pdf'))).rejects.toMatchObject({
+        appError: { code: 'INVALID_DOCUMENT' }
+      })
+    }
+  )
 
   it('rejects a sparse file over the 200 MiB boundary before parsing content', async () => {
     const directory = await createTemporaryDirectory()
@@ -204,6 +235,7 @@ describe('immutable input and output boundaries', () => {
     await writeMinimalPdf(inputPath)
     const input = await createInputSnapshot(inputPath)
     const workspace = await createTemporaryWorkspace(directory)
+    expect(workspace.outputDirectory).toBe(await realpath(directory))
     const temporaryPath = await reserveTemporaryFile(workspace, 'input_sanitized.pdf')
     await writeFile(temporaryPath, '%PDF-1.7\nsanitized\n%%EOF', 'utf8')
     const outputSha256 = await sha256File(temporaryPath)
@@ -316,10 +348,53 @@ describe('immutable input and output boundaries', () => {
 
   it('refuses to clean an untrusted temporary workspace object', async () => {
     const directory = await createTemporaryDirectory()
-    const forged = new TemporaryWorkspace(join(directory, '.bid-sentry-tmp-forged'), directory)
+    const forged = new TemporaryWorkspace(
+      join(directory, '.bid-sentry-tmp-forged'),
+      directory,
+      { device: '1', inode: '2', mode: '16877' },
+      { device: '1', inode: '3', mode: '16877' }
+    )
 
     await expect(cleanupTemporaryWorkspace(forged)).rejects.toMatchObject({
       appError: { code: 'INTERNAL_ERROR' }
     })
+  })
+
+  it('preserves a same-name directory that replaced the created workspace', async () => {
+    const directory = await createTemporaryDirectory()
+    const workspace = await createTemporaryWorkspace(directory)
+    const movedWorkspace = `${workspace.rootPath}-moved`
+    await rename(workspace.rootPath, movedWorkspace)
+    await mkdir(workspace.rootPath)
+    const replacementFile = join(workspace.rootPath, 'user-owned.txt')
+    await writeFile(replacementFile, 'keep this replacement', 'utf8')
+
+    await expect(cleanupTemporaryWorkspace(workspace)).rejects.toMatchObject({
+      appError: { code: 'INTERNAL_ERROR' }
+    })
+
+    expect(await readFile(replacementFile, 'utf8')).toBe('keep this replacement')
+    await expect(access(movedWorkspace)).resolves.toBeUndefined()
+  })
+
+  it('rejects adoption when the workspace creation identity does not match', async () => {
+    const directory = await createTemporaryDirectory()
+    const workspace = await createTemporaryWorkspace(directory)
+    const mismatchedIdentity = {
+      ...workspace.rootIdentity,
+      inode: (BigInt(workspace.rootIdentity.inode) + 1n).toString(10)
+    }
+
+    await expect(
+      adoptTemporaryWorkspace({
+        rootPath: workspace.rootPath,
+        outputDirectory: workspace.outputDirectory,
+        rootIdentity: mismatchedIdentity,
+        outputDirectoryIdentity: workspace.outputDirectoryIdentity
+      })
+    ).rejects.toMatchObject({ appError: { code: 'INTERNAL_ERROR' } })
+
+    await expect(access(workspace.rootPath)).resolves.toBeUndefined()
+    await cleanupTemporaryWorkspace(workspace)
   })
 })

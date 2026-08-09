@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import type { BigIntStats } from 'node:fs'
 import { lstat, readdir } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import {
@@ -8,11 +9,15 @@ import {
   type PublishedFile
 } from '../../core/documents/fileSafety'
 import {
+  fileSystemIdentityFromBigInts,
+  sameFileSystemIdentity
+} from '../../core/documents/pathSafety'
+import {
   renderSanitizationReportHtml,
   serializeSanitizationReport
 } from '../../core/sanitization/report'
 import { buildReportPaths } from '../../core/sanitization/sanitizeResult'
-import type { WorkerExecutionResult } from '../../shared/contracts'
+import type { FileSystemIdentity, WorkerExecutionResult } from '../../shared/contracts'
 
 interface ExpectedArtifact {
   finalPath: string
@@ -22,8 +27,7 @@ interface ExpectedArtifact {
 
 interface WorkspaceArtifact {
   absolutePath: string
-  device: number
-  inode: number
+  identity: FileSystemIdentity
 }
 
 interface ArtifactValidation {
@@ -67,8 +71,8 @@ export async function validateExecutionResultArtifacts(options: {
   }
 
   const inodeIdentities = rollbackCandidates
-    .filter((artifact) => artifact.device !== 0 || artifact.inode !== 0)
-    .map((artifact) => `${artifact.device}:${artifact.inode}`)
+    .filter((artifact) => artifact.identity.device !== '0' || artifact.identity.inode !== '0')
+    .map((artifact) => `${artifact.identity.device}:${artifact.identity.inode}`)
   if (new Set(inodeIdentities).size !== inodeIdentities.length) {
     validationErrors.push(new Error('Execution artifacts reused the same inode.'))
     validationFailed = true
@@ -160,30 +164,34 @@ async function validateArtifact(
   artifact: ExpectedArtifact,
   workspaceArtifacts: readonly WorkspaceArtifact[]
 ): Promise<ArtifactValidation> {
-  const finalBefore = await lstat(artifact.finalPath)
+  const finalBefore = await lstat(artifact.finalPath, { bigint: true })
   assertRegularFile(finalBefore)
-  const temporaryPath = findWorkspaceLink(workspaceArtifacts, finalBefore.dev, finalBefore.ino)
-  const temporaryBefore = await lstat(temporaryPath)
+  const finalIdentity = fileSystemIdentityFromBigInts(
+    finalBefore.dev,
+    finalBefore.ino,
+    finalBefore.mode
+  )
+  const temporaryPath = findWorkspaceLink(workspaceArtifacts, finalIdentity)
+  const temporaryBefore = await lstat(temporaryPath, { bigint: true })
   assertMatchingRegularFiles(temporaryBefore, finalBefore)
   const publishedFile = {
     absolutePath: resolve(artifact.finalPath),
-    device: finalBefore.dev,
-    inode: finalBefore.ino
+    identity: finalIdentity
   }
   try {
-    if (finalBefore.size !== artifact.size) throw new Error('Published artifact size mismatch.')
+    if (finalBefore.size !== BigInt(artifact.size)) {
+      throw new Error('Published artifact size mismatch.')
+    }
     const sha256 = await sha256File(artifact.finalPath)
     const [temporaryAfter, finalAfter] = await Promise.all([
-      lstat(temporaryPath),
-      lstat(artifact.finalPath)
+      lstat(temporaryPath, { bigint: true }),
+      lstat(artifact.finalPath, { bigint: true })
     ])
     assertMatchingRegularFiles(temporaryAfter, finalAfter)
     if (
-      temporaryAfter.dev !== temporaryBefore.dev ||
-      temporaryAfter.ino !== temporaryBefore.ino ||
-      finalAfter.dev !== finalBefore.dev ||
-      finalAfter.ino !== finalBefore.ino ||
-      finalAfter.size !== artifact.size ||
+      !sameStatsIdentity(temporaryAfter, temporaryBefore) ||
+      !sameStatsIdentity(finalAfter, finalBefore) ||
+      finalAfter.size !== BigInt(artifact.size) ||
       sha256 !== artifact.sha256
     ) {
       throw new Error('Published artifact changed during validation.')
@@ -201,20 +209,22 @@ async function readWorkspaceArtifacts(workspaceRootPath: string): Promise<Worksp
   for (const entry of entries) {
     if (!entry.isFile() || entry.isSymbolicLink()) continue
     const absolutePath = join(rootPath, entry.name)
-    const info = await lstat(absolutePath)
+    const info = await lstat(absolutePath, { bigint: true })
     if (!info.isFile() || info.isSymbolicLink()) continue
-    artifacts.push({ absolutePath, device: info.dev, inode: info.ino })
+    artifacts.push({
+      absolutePath,
+      identity: fileSystemIdentityFromBigInts(info.dev, info.ino, info.mode)
+    })
   }
   return artifacts
 }
 
 function findWorkspaceLink(
   workspaceArtifacts: readonly WorkspaceArtifact[],
-  device: number,
-  inode: number
+  identity: FileSystemIdentity
 ): string {
-  const matches = workspaceArtifacts.filter(
-    (artifact) => artifact.device === device && artifact.inode === inode
+  const matches = workspaceArtifacts.filter((artifact) =>
+    sameFileSystemIdentity(artifact.identity, identity)
   )
   if (matches.length !== 1) {
     throw new Error('Published artifact does not have one task-owned workspace link.')
@@ -222,19 +232,23 @@ function findWorkspaceLink(
   return matches[0]?.absolutePath as string
 }
 
-function assertRegularFile(info: Awaited<ReturnType<typeof lstat>>): void {
+function assertRegularFile(info: BigIntStats): void {
   if (!info.isFile() || info.isSymbolicLink()) {
     throw new Error('Published artifact is not a regular file.')
   }
 }
 
-function assertMatchingRegularFiles(
-  temporary: Awaited<ReturnType<typeof lstat>>,
-  final: Awaited<ReturnType<typeof lstat>>
-): void {
+function assertMatchingRegularFiles(temporary: BigIntStats, final: BigIntStats): void {
   assertRegularFile(temporary)
   assertRegularFile(final)
-  if (temporary.dev !== final.dev || temporary.ino !== final.ino) {
+  if (!sameStatsIdentity(temporary, final)) {
     throw new Error('Published artifact is not the task-owned workspace file.')
   }
+}
+
+function sameStatsIdentity(left: BigIntStats, right: BigIntStats): boolean {
+  return sameFileSystemIdentity(
+    fileSystemIdentityFromBigInts(left.dev, left.ino, left.mode),
+    fileSystemIdentityFromBigInts(right.dev, right.ino, right.mode)
+  )
 }

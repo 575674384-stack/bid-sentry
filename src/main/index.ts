@@ -69,7 +69,7 @@ async function startApplication(): Promise<void> {
   await workspaceJournal.recover()
   const taskManager = new TaskManager(() => createWorker(e2eHarness), {
     recordWorkspace: (workspace) => workspaceJournal.add(workspace),
-    forgetWorkspace: (rootPath) => workspaceJournal.remove(rootPath)
+    forgetWorkspace: (workspace) => workspaceJournal.remove(workspace)
   })
   activeTaskManager = taskManager
   disposeIpc = registerIpc({

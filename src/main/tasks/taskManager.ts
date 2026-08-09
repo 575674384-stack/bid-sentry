@@ -2,15 +2,19 @@ import { basename, dirname, resolve } from 'node:path'
 import {
   TaskProgressSchema,
   TaskExecutionRequestSchema,
+  FileSystemIdentitySchema,
+  TemporaryWorkspaceDescriptorSchema,
   WorkerExecuteRequestSchema,
   WorkerPreviewRequestSchema,
   WorkerResponseSchema,
   createAppError,
   type AppError,
+  type FileSystemIdentity,
   type SanitizationPreview,
   type TaskProgress,
   type TaskState,
   type TaskExecutionRequest,
+  type TemporaryWorkspaceDescriptor,
   type WorkerExecutionResult,
   type WorkerPreviewRequest,
   type WorkerRequest
@@ -22,6 +26,7 @@ import {
   rollbackPublishedFiles,
   type PublishedFile
 } from '../../core/documents/fileSafety'
+import { sameFileSystemIdentity } from '../../core/documents/pathSafety'
 import { aggregateVerification } from '../../core/sanitization/verificationSummary'
 import { validateExecutionResultArtifacts } from './validateExecutionResult'
 
@@ -39,12 +44,10 @@ export interface TaskManagerOptions {
   maxConcurrent?: 1 | 2
   operationTimeoutMs?: number
   cancelKillTimeoutMs?: number
-  cleanupWorkspace?: (rootPath: string, outputDirectory: string) => Promise<void>
-  createWorkspace?: (
-    outputDirectory: string
-  ) => Promise<{ rootPath: string; outputDirectory: string }>
-  recordWorkspace?: (workspace: { rootPath: string; outputDirectory: string }) => Promise<void>
-  forgetWorkspace?: (rootPath: string) => Promise<void>
+  cleanupWorkspace?: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
+  createWorkspace?: (outputDirectory: string) => Promise<TemporaryWorkspaceDescriptor>
+  recordWorkspace?: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
+  forgetWorkspace?: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
 }
 
 interface Deferred<T> {
@@ -60,7 +63,8 @@ interface TaskRecord {
   preview: Deferred<SanitizationPreview>
   execution: Deferred<WorkerExecutionResult> | null
   expectedOutputDirectory: string | null
-  workspace: { rootPath: string; outputDirectory: string } | null
+  expectedOutputDirectoryIdentity: FileSystemIdentity | null
+  workspace: TemporaryWorkspaceDescriptor | null
   operationTimer: NodeJS.Timeout | null
   killTimer: NodeJS.Timeout | null
   pendingCompletion: TaskProgress | null
@@ -96,15 +100,10 @@ export class TaskManager {
   readonly #maxConcurrent: 1 | 2
   readonly #operationTimeoutMs: number
   readonly #cancelKillTimeoutMs: number
-  readonly #cleanupWorkspace: (rootPath: string, outputDirectory: string) => Promise<void>
-  readonly #createWorkspace: (
-    outputDirectory: string
-  ) => Promise<{ rootPath: string; outputDirectory: string }>
-  readonly #recordWorkspace: (workspace: {
-    rootPath: string
-    outputDirectory: string
-  }) => Promise<void>
-  readonly #forgetWorkspace: (rootPath: string) => Promise<void>
+  readonly #cleanupWorkspace: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
+  readonly #createWorkspace: (outputDirectory: string) => Promise<TemporaryWorkspaceDescriptor>
+  readonly #recordWorkspace: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
+  readonly #forgetWorkspace: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
 
   constructor(
     private readonly launchWorker: WorkerLauncher,
@@ -118,7 +117,12 @@ export class TaskManager {
       options.createWorkspace ??
       (async (outputDirectory) => {
         const workspace = await createTemporaryWorkspace(outputDirectory)
-        return { rootPath: workspace.rootPath, outputDirectory: workspace.outputDirectory }
+        return {
+          rootPath: workspace.rootPath,
+          outputDirectory: workspace.outputDirectory,
+          rootIdentity: workspace.rootIdentity,
+          outputDirectoryIdentity: workspace.outputDirectoryIdentity
+        }
       })
     this.#recordWorkspace = options.recordWorkspace ?? (async () => undefined)
     this.#forgetWorkspace = options.forgetWorkspace ?? (async () => undefined)
@@ -142,6 +146,7 @@ export class TaskManager {
       preview: deferred<SanitizationPreview>(),
       execution: null,
       expectedOutputDirectory: null,
+      expectedOutputDirectoryIdentity: null,
       workspace: null,
       operationTimer: null,
       killTimer: null,
@@ -162,8 +167,12 @@ export class TaskManager {
     return record.preview.promise
   }
 
-  execute(requestInput: TaskExecutionRequest): Promise<WorkerExecutionResult> {
+  execute(
+    requestInput: TaskExecutionRequest,
+    selectedOutputDirectoryIdentity: FileSystemIdentity
+  ): Promise<WorkerExecutionResult> {
     const request = TaskExecutionRequestSchema.parse(requestInput)
+    const outputDirectoryIdentity = FileSystemIdentitySchema.parse(selectedOutputDirectoryIdentity)
     const record = this.#tasks.get(request.taskId)
     if (!record || record.state !== 'awaiting-confirmation' || record.execution) {
       throw new TaskManagerError(createAppError('TASK_NOT_FOUND'))
@@ -171,6 +180,7 @@ export class TaskManager {
 
     record.execution = deferred<WorkerExecutionResult>()
     record.expectedOutputDirectory = resolve(request.outputDirectory)
+    record.expectedOutputDirectoryIdentity = outputDirectoryIdentity
     this.#armOperationTimer(record)
     void this.#prepareExecution(record, request)
     return record.execution.promise
@@ -323,30 +333,34 @@ export class TaskManager {
 
   async #prepareExecution(record: TaskRecord, request: TaskExecutionRequest): Promise<void> {
     try {
-      const workspace = await this.#createWorkspace(request.outputDirectory)
+      const workspace = TemporaryWorkspaceDescriptorSchema.parse(
+        await this.#createWorkspace(request.outputDirectory)
+      )
       if (record.settled) {
-        await this.#cleanupWorkspace(workspace.rootPath, workspace.outputDirectory)
+        await this.#cleanupWorkspace(workspace)
         return
       }
       const expectedOutput = record.expectedOutputDirectory
+      const expectedOutputIdentity = record.expectedOutputDirectoryIdentity
       if (
         !expectedOutput ||
+        !expectedOutputIdentity ||
         normalizeFileIdentity(workspace.outputDirectory) !==
           normalizeFileIdentity(expectedOutput) ||
+        !sameFileSystemIdentity(workspace.outputDirectoryIdentity, expectedOutputIdentity) ||
         normalizeFileIdentity(dirname(resolve(workspace.rootPath))) !==
           normalizeFileIdentity(expectedOutput) ||
         !basename(resolve(workspace.rootPath)).startsWith('.bid-sentry-tmp-')
       ) {
-        await this.#cleanupWorkspace(workspace.rootPath, workspace.outputDirectory).catch(
-          () => undefined
-        )
+        await this.#cleanupWorkspace(workspace).catch(() => undefined)
         await this.#fail(record, createAppError('INTERNAL_ERROR'))
         return
       }
-      record.workspace = {
+      record.workspace = TemporaryWorkspaceDescriptorSchema.parse({
+        ...workspace,
         rootPath: resolve(workspace.rootPath),
         outputDirectory: resolve(workspace.outputDirectory)
-      }
+      })
       await this.#recordWorkspace(record.workspace)
       if (record.cancelRequested) {
         await this.#fail(record, createAppError('TASK_CANCELLED'))
@@ -355,7 +369,9 @@ export class TaskManager {
       record.worker.postMessage(
         WorkerExecuteRequestSchema.parse({
           ...request,
-          workspaceRootPath: record.workspace.rootPath
+          workspaceRootPath: record.workspace.rootPath,
+          workspaceRootIdentity: record.workspace.rootIdentity,
+          outputDirectoryIdentity: record.workspace.outputDirectoryIdentity
         })
       )
     } catch {
@@ -404,8 +420,8 @@ export class TaskManager {
   async #cleanup(record: TaskRecord): Promise<AppError | null> {
     try {
       if (record.workspace) {
-        await this.#cleanupWorkspace(record.workspace.rootPath, record.workspace.outputDirectory)
-        await this.#forgetWorkspace(record.workspace.rootPath)
+        await this.#cleanupWorkspace(record.workspace)
+        await this.#forgetWorkspace(record.workspace)
       }
       return null
     } catch {

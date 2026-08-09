@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task10-workspace-identity-focused-gate",
+  "type": "automated-verification",
+  "source": "pathSafety/fileSafety/workspaceJournal/contracts/workerRuntime/taskManager/ipc focused Vitest; pnpm typecheck",
+  "summary": "7 files: 57 passed, 1 Windows-only junction skipped on Linux; Node/Web typecheck passed. Covers creation identity transport, same-name replacement preservation, legacy journal quarantine, Worker missing-identity rejection, adopt mismatch, and selected output identity replacement.",
+  "verifier": "root coordinator"
+}
