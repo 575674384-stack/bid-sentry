@@ -2,11 +2,11 @@
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
   "lastCheckpointRef": "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/todo-checkpoint-draft.json",
-  "resumeInstruction": "Windows 首次 CI 失败已归因于测试消费非 canonical 临时目录别名；生产 guard 未放宽，下一步从小提交和新 CI 继续",
+  "resumeInstruction": "Windows 第二次 CI 已通过 Vitest/junction，但 E2E reveal 暴露 root alias；测试路径生产者已 canonicalize，下一步从小提交和新 CI 继续",
   "knownPartialWork": [
     "exact identity 修复已提交并推送为 bdbbbc2",
-    "GitHub Actions 31326853393 的 Linux x64 全链通过",
-    "Windows 临时目录别名导致的四个测试消费者漂移已定位并最小修复；本地完整门通过"
+    "Windows canonical workspace 测试消费者修复已提交并推送为 c6958e3；Windows Vitest/junction 通过",
+    "Windows E2E root alias 失败已定位到测试路径生产者并最小修复；本地完整门与 4 E2E 通过"
   ],
   "mustReadBeforeContinuing": [
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/10-intent.md",

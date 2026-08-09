@@ -145,3 +145,11 @@ No evidence has been recorded yet.
 - Source: GitHub Actions run 31326853393; focused fileSafety/validateExecutionResult Vitest; full local format/lint/typecheck/17-file Vitest/build
 - Summary: Windows CI exposed four test consumers using a non-canonical temp-directory alias after TemporaryWorkspace returned the verified canonical output directory. Updated only those test call sites to consume workspace.outputDirectory; production canonical-path guards stayed unchanged. Focused 2 files/21 tests and full local 17 files/131 tests passed; Linux job in the failed matrix completed all gates successfully. Final Windows rerun remains required.
 - Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task10-windows-e2e-root-repair-gate
+- Type: automated-debugging-verification
+- Source: GitHub Actions run 31327100073 Windows E2E log; local Electron Playwright; full local format/lint/typecheck/17-file Vitest/build
+- Summary: Windows Vitest and junction regression passed, then the real Electron result-flow E2E revealed that the E2E root producer retained a Windows temp-directory alias while Main returned canonical result paths. Canonicalized the E2E root immediately after mkdtemp; production containment checks remained strict. Local 4 Electron E2E passed, packaged-only skipped as expected, and full local 17 files/131 tests plus build passed. Final Windows rerun remains required.
+- Verifier: root coordinator

@@ -354,3 +354,27 @@
 - New risk signals:
 - 仅新 Windows/Linux CI 与最终 artifacts 未完成
 - Advisory decision: needs-verification
+
+## Checkpoint Update
+
+- Current todo: 推送 Windows E2E canonical root 修复并重跑双平台 CI
+- Active slice: Task 10 Windows-host Electron E2E canonical root 修复与 CI 复验
+- Completed todos:
+- exact identity 修复已提交并推送为 bdbbbc2
+- Windows canonical workspace 测试消费者修复已提交并推送为 c6958e3；Windows Vitest/junction 通过
+- Windows E2E root alias 失败已定位到测试路径生产者并最小修复；本地完整门与 4 E2E 通过
+- Evidence refs:
+- task10-workspace-identity-full-gate
+- task10-windows-canonical-path-repair-gate
+- task10-windows-e2e-root-repair-gate
+- Blocked on: 最终 Windows x64 E2E、NSIS/portable、ASAR、packaged startup 和 artifacts 仍需新 CI
+- Next step: 精确提交 E2E 测试文件和 Aegis 记录，推送 main，等待新 Linux/Windows CI
+
+## DriftCheckDraft
+
+- Scope status: Task 10 Windows-host E2E 测试路径生产者修复；仅 canonicalize 测试根目录，不修改生产路径、M2/M3/OCR 或用户文件
+- Compatibility status: Windows/Linux x64；E2E 全部从 canonical root 派生输入、输出、用户数据与 reveal log，生产 containment 与 exact identity 守卫保持不变
+- Retirement status: 无新增 fallback、平台特判或第二 owner；未 canonical 化的 E2E root 生产路径被原位替换
+- New risk signals:
+- 仅新 Windows/Linux CI 与最终 artifacts 未完成
+- Advisory decision: needs-verification

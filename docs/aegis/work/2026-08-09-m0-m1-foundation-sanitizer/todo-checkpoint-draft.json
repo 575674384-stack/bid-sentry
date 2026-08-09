@@ -1,18 +1,19 @@
 {
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
-  "currentTodo": "推送 Windows canonical temp path 测试修复并重跑双平台 CI",
+  "currentTodo": "推送 Windows E2E canonical root 修复并重跑双平台 CI",
   "completedTodos": [
     "exact identity 修复已提交并推送为 bdbbbc2",
-    "GitHub Actions 31326853393 的 Linux x64 全链通过",
-    "Windows 临时目录别名导致的四个测试消费者漂移已定位并最小修复；本地完整门通过"
+    "Windows canonical workspace 测试消费者修复已提交并推送为 c6958e3；Windows Vitest/junction 通过",
+    "Windows E2E root alias 失败已定位到测试路径生产者并最小修复；本地完整门与 4 E2E 通过"
   ],
-  "activeSlice": "Task 10 Windows-host canonical path regression 修复与 CI 复验",
+  "activeSlice": "Task 10 Windows-host Electron E2E canonical root 修复与 CI 复验",
   "evidenceRefs": [
     "task10-workspace-identity-full-gate",
-    "task10-windows-canonical-path-repair-gate"
+    "task10-windows-canonical-path-repair-gate",
+    "task10-windows-e2e-root-repair-gate"
   ],
   "blockedOn": "最终 Windows x64 E2E、NSIS/portable、ASAR、packaged startup 和 artifacts 仍需新 CI",
-  "nextStep": "精确提交两个测试文件和 Aegis 记录，推送 main，等待新 Linux/Windows CI",
+  "nextStep": "精确提交 E2E 测试文件和 Aegis 记录，推送 main，等待新 Linux/Windows CI",
   "updatedAt": "2026-08-09"
 }

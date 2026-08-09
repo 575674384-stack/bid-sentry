@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
-import { mkdtemp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
@@ -225,7 +225,7 @@ async function launchTestApplication(options: {
   inputCount: number
   executeDelayMs?: number
 }): Promise<TestApplication> {
-  const root = await mkdtemp(join(tmpdir(), 'bid-sentry-e2e-'))
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'bid-sentry-e2e-')))
   const fixturesDirectory = join(root, 'fixtures')
   const outputDirectory = join(root, 'output')
   const userDataDirectory = join(root, 'user-data')
