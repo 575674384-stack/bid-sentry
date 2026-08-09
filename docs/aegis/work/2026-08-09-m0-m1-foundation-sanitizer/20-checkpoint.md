@@ -25,3 +25,25 @@
 - task1-quality-gate
 - Blocked on: none
 - Next step: 实现共享 Schema 与 contracts.test.ts，运行 focused test 和 typecheck
+
+## DriftCheckDraft
+
+- Scope status: Task 2 仅共享契约和测试；未接线 IPC、文件或业务逻辑
+- Compatibility status: schemaVersion 1；Main/Worker/Renderer 共享 Zod；完成状态以 passed verification 为事实来源
+- Retirement status: 无旧契约；未添加兼容分支
+- New risk signals:
+- none
+- Advisory decision: continue
+
+## Checkpoint Update
+
+- Current todo: Task 3 实现设置、安全密钥与 AI 连接测试
+- Active slice: Task 3：SecretStore、SettingsService、OpenAI Compatible /models 连接测试
+- Completed todos:
+- Task 1 建立可构建的 Electron 安全骨架
+- Task 2 定义版本化共享契约与错误模型
+- Evidence refs:
+- task1-quality-gate
+- task2-contract-gate
+- Blocked on: none
+- Next step: 实现密钥与设置所有者，使用内存/临时目录/MockAgent 测试，不接触真实 API

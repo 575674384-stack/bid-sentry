@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task2-contract-gate",
+  "type": "automated-verification",
+  "source": "contracts.test.ts; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build",
+  "summary": "8 个契约测试通过；completed/verification、严格字段、安全错误与单向 Key 输入边界有效",
+  "verifier": "root coordinator"
+}

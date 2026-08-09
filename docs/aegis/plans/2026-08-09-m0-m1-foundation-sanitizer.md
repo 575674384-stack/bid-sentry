@@ -277,7 +277,7 @@ test -f out/preload/index.mjs
 
 **Steps**
 
-1. 定义 `AiSettingsSchema`，字段为 Base URL、model、timeoutMs（5,000–120,000）、maxConcurrency（1–4）和 `hasApiKey`；跨 IPC 永不携带明文 Key。
+1. 定义只读 `AiSettingsSchema`，字段为 Base URL、model、timeoutMs（5,000–120,000）、maxConcurrency（1–4）和 `hasApiKey`；另定义只用于用户单向提交的 `AiSettingsUpdateSchema`，可携带本次输入的 Key，但任何 Main 响应均不得回显已保存明文 Key。
 2. 定义 `InputSnapshotSchema`，包含规范路径、displayName、类型、size、sha256、mtimeMs；路径只在 Main/Worker 契约出现，报告只保存 displayName 和哈希。
 3. 定义 `SanitizationPreviewSchema`、`SanitizationCommandSchema`、`TaskProgressSchema`、`VerificationReportSchema`、`SanitizationReportSchema`，并用 Zod refine 强制 completed/verified 约束。
 4. 定义 IPC channel 常量，只有 `settings:get`、`settings:save`、`settings:test-ai`、`files:select-inputs`、`files:select-output`、`sanitize:preview`、`sanitize:execute`、`task:cancel`、`task:subscribe`。
@@ -304,7 +304,7 @@ pnpm typecheck
 
 **Why**
 
-满足单机开源项目“用户自配 API Key”的基础要求，并保证 Key 不以明文落盘或进入 Renderer/日志。
+满足单机开源项目“用户自配 API Key”的基础要求，并保证已保存 Key 不以明文落盘、不能被 Renderer 读回且不进入日志。
 
 **Change Necessity**
 

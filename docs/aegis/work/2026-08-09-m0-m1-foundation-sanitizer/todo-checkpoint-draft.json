@@ -1,15 +1,17 @@
 {
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
-  "currentTodo": "Task 2 定义版本化共享契约与错误模型",
+  "currentTodo": "Task 3 实现设置、安全密钥与 AI 连接测试",
   "completedTodos": [
-    "Task 1 建立可构建的 Electron 安全骨架"
+    "Task 1 建立可构建的 Electron 安全骨架",
+    "Task 2 定义版本化共享契约与错误模型"
   ],
-  "activeSlice": "Task 2：settings/documents/sanitization/ipc/errors Zod 契约",
+  "activeSlice": "Task 3：SecretStore、SettingsService、OpenAI Compatible /models 连接测试",
   "evidenceRefs": [
-    "task1-quality-gate"
+    "task1-quality-gate",
+    "task2-contract-gate"
   ],
   "blockedOn": null,
-  "nextStep": "实现共享 Schema 与 contracts.test.ts，运行 focused test 和 typecheck",
+  "nextStep": "实现密钥与设置所有者，使用内存/临时目录/MockAgent 测试，不接触真实 API",
   "updatedAt": "2026-08-09"
 }
