@@ -8,11 +8,11 @@
     "docs/aegis/adr/ADR-0001-verified-document-publication.md",
     "docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md"
   ],
-  "scopeStatus": "Task 10 Windows-host 包审计路径修复；仅分离审计策略路径与 ASAR 原生提取路径，不修改生产应用、M2/M3/OCR 或用户文件",
-  "compatStatus": "Windows/Linux x64；ASAR 条目继续统一规范化执行白名单/敏感标记策略，同时以去根原生路径调用 extractFile",
-  "retirementStatus": "无跳过扫描、fallback、平台特判或第二审计 owner；错误复用规范化路径的调用被原位替换",
+  "scopeStatus": "Task 1-10 的 M0-M1 元数据清洗应用与发布验证均在批准范围内完成；未进入 M2/M3/OCR、服务端、数据库、遥测或自动更新",
+  "compatStatus": "Windows/Linux x64、DOCX/PDF、原文件只读、验证后发布、用户自配 OpenAI 兼容 API 等基线边界保持；run 31327619981 在两平台直接验证安装包与启动",
+  "retirementStatus": "所有调查中发现的旧 path-only/number-inode/错误测试别名/ASAR 路径复用均已原位退休；无 fallback、第二写入器、验证绕过或旧 journal 兼容路径",
   "newRiskSignals": [
-    "仅新 Windows/Linux CI 与最终 artifacts 未完成"
+    "最终文档提交仍需独立双平台 CI；v0.1.0 标签、Release 资产和公开 SHA256SUMS.txt 尚未创建"
   ],
-  "decision": "needs-verification"
+  "decision": "continue"
 }

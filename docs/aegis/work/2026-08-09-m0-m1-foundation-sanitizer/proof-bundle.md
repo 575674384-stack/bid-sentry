@@ -18,6 +18,7 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 ## Evidence Bundle Refs
 
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task1-quality-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-cross-platform-release-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-local-quality-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-review-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-windows-asar-path-repair-gate.json
@@ -40,7 +41,7 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 
 ## Drift Check
 
-- Scope status: Task 10 Windows-host 包审计路径修复；仅分离审计策略路径与 ASAR 原生提取路径，不修改生产应用、M2/M3/OCR 或用户文件
-- Compatibility status: Windows/Linux x64；ASAR 条目继续统一规范化执行白名单/敏感标记策略，同时以去根原生路径调用 extractFile
-- Retirement status: 无跳过扫描、fallback、平台特判或第二审计 owner；错误复用规范化路径的调用被原位替换
-- Advisory decision: needs-verification
+- Scope status: Task 1-10 的 M0-M1 元数据清洗应用与发布验证均在批准范围内完成；未进入 M2/M3/OCR、服务端、数据库、遥测或自动更新
+- Compatibility status: Windows/Linux x64、DOCX/PDF、原文件只读、验证后发布、用户自配 OpenAI 兼容 API 等基线边界保持；run 31327619981 在两平台直接验证安装包与启动
+- Retirement status: 所有调查中发现的旧 path-only/number-inode/错误测试别名/ASAR 路径复用均已原位退休；无 fallback、第二写入器、验证绕过或旧 journal 兼容路径
+- Advisory decision: continue

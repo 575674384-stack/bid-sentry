@@ -1,19 +1,20 @@
 {
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
-  "currentTodo": "推送 Windows ASAR native path 修复并重跑双平台 CI",
+  "currentTodo": "提交最终 M0-M1 发布证据并完成 v0.1.0 发布",
   "completedTodos": [
-    "exact identity 修复已提交并推送为 bdbbbc2",
-    "Windows canonical workspace 与 E2E root 修复已分别提交为 c6958e3、42bc646；Windows Vitest/junction/E2E/package 通过",
-    "Windows ASAR 审计原生分隔符缺口已在审计 owner 最小修复；本地双 ASAR 与完整门通过"
+    "Task 1-10 功能、测试、文档、Linux 本地打包和独立复审完成",
+    "跨平台 GitHub Actions run 31327619981 在 6e3994a 上全部通过",
+    "四个 CI 安装包已下载并通过名称、类型、字节数和 SHA-256 核验"
   ],
-  "activeSlice": "Task 10 Windows-host ASAR native extraction path 修复与 CI 复验",
+  "activeSlice": "Task 10 最终发布文档、最终提交 CI、校验文件、标签与 GitHub Release",
   "evidenceRefs": [
-    "task10-windows-canonical-path-repair-gate",
-    "task10-windows-e2e-root-repair-gate",
-    "task10-windows-asar-path-repair-gate"
+    "task10-local-quality-gate",
+    "task10-review-gate",
+    "task10-workspace-identity-full-gate",
+    "task10-cross-platform-release-gate"
   ],
-  "blockedOn": "最终 Windows x64 ASAR、packaged startup 和 artifacts 仍需新 CI",
-  "nextStep": "精确提交审计脚本和 Aegis 记录，推送 main，等待新 Linux/Windows CI",
-  "updatedAt": "2026-08-09"
+  "blockedOn": null,
+  "nextStep": "完成反思与结构检查，提交并推送文档；最终提交双平台 CI 通过后下载全新产物、生成 SHA256SUMS.txt 并发布 v0.1.0",
+  "updatedAt": "2026-08-10"
 }

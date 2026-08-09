@@ -1,6 +1,6 @@
 # Bid Sentry M0-M1 实施 - Evidence
 
-No evidence has been recorded yet.
+以下证据按实施切片和发布验证顺序记录。
 
 ## EvidenceBundleDraft
 
@@ -161,3 +161,11 @@ No evidence has been recorded yet.
 - Source: GitHub Actions run 31327357904 Windows package/audit log; local package audit; full local format/lint/typecheck/17-file Vitest/build
 - Summary: Windows Vitest, junction, Electron E2E and NSIS/portable packaging passed, then package audit failed because listPackage native backslash paths were normalized for policy comparison and incorrectly reused as extractFile API paths. The audit owner now keeps normalized policy paths separate from root-stripped native extraction paths; no content scan is skipped. Local Linux and Windows ASAR scans passed together, plus full local 17 files/131 tests and build. Final Windows rerun remains required.
 - Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task10-cross-platform-release-gate
+- Type: automated-cross-platform-release-verification
+- Source: GitHub Actions run 31327619981, jobs 93280398136/93280398185, artifacts 9042009786/9042003373; downloaded artifact file/type/size/SHA-256 inspection
+- Summary: Commit 6e3994a passed Linux x64 and Windows x64 lint, typecheck, 17-file/131-test Vitest, build, real Electron E2E, native package build, ASAR audit, packaged startup and artifact upload. Downloaded artifacts are valid AppImage, Debian package and two PE/NSIS executables: linux deb 101405288 bytes sha256 36b7c3b37c8143b9addb854f4c34cb99f4f4c4f299e1819e8eee96ea4651ea0d; AppImage 101683000 bytes sha256 30fedc799b8c991dd9bb604f0167041fea5e763f4677c55aaf329102ab211593; Windows portable 101825022 bytes sha256 dccbf25fd2e9f46d2852ee82a2042ade087bcc33aa32e78249a6fb2d86441181; Windows setup 102054932 bytes sha256 4b4933467cb327587dbdffb2e524787bd8382e502ec706f73af8d6f477870ba4.
+- Verifier: root coordinator and GitHub-hosted Linux/Windows runners

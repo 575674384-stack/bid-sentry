@@ -402,3 +402,28 @@
 - New risk signals:
 - 仅新 Windows/Linux CI 与最终 artifacts 未完成
 - Advisory decision: needs-verification
+
+## Checkpoint Update
+
+- Current todo: 提交最终 M0-M1 发布证据并完成 v0.1.0 发布
+- Active slice: Task 10 最终发布文档、最终提交 CI、校验文件、标签与 GitHub Release
+- Completed todos:
+- Task 1-10 功能、测试、文档、Linux 本地打包和独立复审完成
+- 跨平台 GitHub Actions run 31327619981 在 6e3994a 上全部通过
+- 四个 CI 安装包已下载并通过名称、类型、字节数和 SHA-256 核验
+- Evidence refs:
+- task10-local-quality-gate
+- task10-review-gate
+- task10-workspace-identity-full-gate
+- task10-cross-platform-release-gate
+- Blocked on: none
+- Next step: 完成反思与结构检查，提交并推送文档；最终提交双平台 CI 通过后下载全新产物、生成 SHA256SUMS.txt 并发布 v0.1.0
+
+## DriftCheckDraft
+
+- Scope status: Task 1-10 的 M0-M1 元数据清洗应用与发布验证均在批准范围内完成；未进入 M2/M3/OCR、服务端、数据库、遥测或自动更新
+- Compatibility status: Windows/Linux x64、DOCX/PDF、原文件只读、验证后发布、用户自配 OpenAI 兼容 API 等基线边界保持；run 31327619981 在两平台直接验证安装包与启动
+- Retirement status: 所有调查中发现的旧 path-only/number-inode/错误测试别名/ASAR 路径复用均已原位退休；无 fallback、第二写入器、验证绕过或旧 journal 兼容路径
+- New risk signals:
+- 最终文档提交仍需独立双平台 CI；v0.1.0 标签、Release 资产和公开 SHA256SUMS.txt 尚未创建
+- Advisory decision: continue
