@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
+  "currentTodo": "Task 2 定义版本化共享契约与错误模型",
+  "completedTodos": [
+    "Task 1 建立可构建的 Electron 安全骨架"
+  ],
+  "activeSlice": "Task 2：settings/documents/sanitization/ipc/errors Zod 契约",
+  "evidenceRefs": [
+    "task1-quality-gate"
+  ],
+  "blockedOn": null,
+  "nextStep": "实现共享 Schema 与 contracts.test.ts，运行 focused test 和 typecheck",
+  "updatedAt": "2026-08-09"
+}

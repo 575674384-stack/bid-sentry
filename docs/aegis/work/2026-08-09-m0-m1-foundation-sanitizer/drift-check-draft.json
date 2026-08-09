@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
+  "taskIntentRef": "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/task-intent-draft.json",
+  "baselineRefs": [
+    "docs/aegis/plans/2026-08-09-m0-m1-foundation-sanitizer.md"
+  ],
+  "scopeStatus": "Task 1 仅基础设施与最小入口，未进入 M2/M3 或业务逻辑",
+  "compatStatus": "Electron 43 + electron-vite 5 + Vite 7 + TypeScript 5.9 peer 契约通过；安全窗口配置保留",
+  "retirementStatus": "无旧路径；未添加 fallback",
+  "newRiskSignals": [
+    "当前 root 容器手工启动 Electron 需 --no-sandbox；生产配置仍强制 sandbox，真实启动由后续 E2E 验证"
+  ],
+  "decision": "continue"
+}

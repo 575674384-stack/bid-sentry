@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [
+    "Electron、共享契约、文档核心、清洗编排、UI、构建"
+  ],
+  "owners": [
+    "core/documents 与 core/sanitization，跨进程契约由 shared/contracts 所有"
+  ],
+  "invariants": [
+    "原文件只读；AI/Renderer 不写文件；验证失败不落盘"
+  ],
+  "compatBoundary": "Windows/Linux x64；DOCX/PDF；无 OCR/服务端/数据库",
+  "nonGoals": [
+    "M2/M3、OCR、自动更新、遥测、LibreOffice"
+  ]
+}

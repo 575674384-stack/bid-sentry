@@ -19,7 +19,7 @@ AI 不参与 M1 文件修改。M0 只实现 OpenAI 兼容接口配置与连接�
 ## Tech Stack
 
 - Node.js 22，pnpm 11。
-- Electron 43、electron-vite 5、Vite 8、React 19、TypeScript 7。
+- Electron 43、electron-vite 5、Vite 7、React 19、TypeScript 5.9。
 - Zod 4：IPC、设置、任务、报告契约。
 - yauzl/yazl：受限读取与重建 DOCX ZIP 包。
 - @xmldom/xmldom + xpath：定点修改 OOXML 元数据和身份属性。
@@ -231,13 +231,13 @@ AI 不参与 M1 文件修改。M0 只实现 OpenAI 兼容接口配置与连接�
 
 1. 创建 `package.json`，设置 `name: "bid-sentry"`、`type: "module"`、`packageManager: "pnpm@11.18.0"`、`engines.node: ">=22"`，并定义 `dev`、`build`、`lint`、`typecheck`、`test`、`test:e2e`、`package:win`、`package:linux` 脚本。
 2. 安装固定主版本依赖：`pnpm add react@19 react-dom@19 zod@4 pdf-lib@1 yauzl@3 yazl@3 @xmldom/xmldom@0.9 xpath@0.0.34 @electron-toolkit/preload @electron-toolkit/utils`。
-3. 安装开发依赖：`pnpm add -D electron@43 electron-vite@5 vite@8 @vitejs/plugin-react typescript@7 electron-builder@26 vitest@4 @vitest/coverage-v8 @playwright/test@1.62 eslint @eslint/js typescript-eslint eslint-plugin-react-hooks prettier @types/node @types/react @types/react-dom @types/yauzl @types/yazl`。
+3. 安装开发依赖：`pnpm add -D electron@43 electron-vite@5 vite@7 @vitejs/plugin-react@5 typescript@5.9.3 electron-builder@26 vitest@4 @vitest/coverage-v8 @playwright/test@1.62 eslint @eslint/js typescript-eslint eslint-plugin-react-hooks prettier @types/node @types/react @types/react-dom @types/yauzl @types/yazl`；在 `pnpm-workspace.yaml` 中只允许 Electron、esbuild 和 electron-winstaller 执行安装脚本。
 4. 创建三个严格 TypeScript 配置：Node 侧启用 `noUncheckedIndexedAccess` 和 `exactOptionalPropertyTypes`，Web 侧只包含 DOM/React，根配置只做 project references。
 5. 配置 electron-vite 的 Main 多入口 `index`/`worker`、Preload 入口和 React Renderer；输出名固定为 `[name].js`。
 6. 创建仅显示“Bid Sentry / 文档安全助手”的最小界面和本地 CSS，不引用 CDN、远程字体或内联脚本。
 7. 创建 BrowserWindow，设置安全 webPreferences、外部导航拦截、生产环境本地文件加载和开发环境 Vite URL 加载。
 8. 创建空白 Preload API 和 Worker 消息循环，未知消息返回稳定错误而不执行操作。
-9. 运行 `pnpm lint && pnpm typecheck && pnpm test --run && pnpm build`；预期全部退出码为 0，`out/main/index.js`、`out/main/worker.js`、`out/preload/index.js` 和 Renderer 产物存在。
+9. 运行 `pnpm lint && pnpm typecheck && pnpm test --run && pnpm build`；预期全部退出码为 0，`out/main/index.js`、`out/main/worker.js`、`out/preload/index.mjs` 和 Renderer 产物存在。
 
 **Verification**
 
@@ -248,7 +248,7 @@ pnpm test --run
 pnpm build
 test -f out/main/index.js
 test -f out/main/worker.js
-test -f out/preload/index.js
+test -f out/preload/index.mjs
 ```
 
 提交：`chore: scaffold secure electron application`

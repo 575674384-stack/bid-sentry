@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "交付可安装、可测试的 Electron 基础设施和 DOCX/PDF 元数据安全重置",
+  "goal": "按批准规格完成 M0-M1，并以强制内容验证保护原文件",
+  "successEvidence": [
+    "全量质量门、格式指纹、Electron E2E、Linux 安装包与 Windows CI 证据"
+  ],
+  "stopCondition": "10 个任务完成为 done；阻断依赖为 blocked；缺少主机或格式证据为 needs-verification；超出 M0-M1 为 scope-exceeded",
+  "nonGoals": [
+    "M2/M3、OCR、自动更新、遥测、LibreOffice"
+  ],
+  "scope": "Task 1-10：Electron 骨架、契约、密钥、文件安全、随机报告、DOCX/PDF、任务 IPC、UI、E2E 与打包",
+  "changeKinds": [
+    "implementation"
+  ],
+  "riskHints": [
+    "文档格式漂移、签名漏检、API Key 泄漏、跨进程状态漂移"
+  ]
+}

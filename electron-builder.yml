@@ -1,0 +1,17 @@
+appId: io.github.bidsentry.desktop
+productName: Bid Sentry
+asar: true
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+linux:
+  category: Utility
+  target:
+    - AppImage
+    - deb
+win:
+  target:
+    - nsis
+    - portable

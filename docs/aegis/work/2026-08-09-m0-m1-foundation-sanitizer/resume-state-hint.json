@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
+  "lastCheckpointRef": "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/todo-checkpoint-draft.json",
+  "resumeInstruction": "读取 10-intent.md、20-checkpoint.md、批准规格和实施计划；对比 HEAD/状态后从 Task 2 开始",
+  "knownPartialWork": [
+    "Task 1 建立可构建的 Electron 安全骨架"
+  ],
+  "mustReadBeforeContinuing": [
+    "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/10-intent.md",
+    "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/20-checkpoint.md",
+    "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/todo-checkpoint-draft.json"
+  ],
+  "unsafeToAssume": [
+    "不得假设 Windows 构建、Electron E2E 或真实 DOCX/PDF 已验证"
+  ]
+}
