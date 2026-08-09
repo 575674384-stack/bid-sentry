@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task3-settings-security-gate",
+  "type": "automated-verification",
+  "source": "settingsService.test.ts; openAiCompatibleClient.test.ts; full lint/typecheck/test/build",
+  "summary": "15 个定向/23 个全量测试通过；0600、加密/会话边界、Key 不回显、URL 与 HTTP 状态映射有效",
+  "verifier": "root coordinator"
+}

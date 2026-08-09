@@ -17,3 +17,11 @@ No evidence has been recorded yet.
 - Source: contracts.test.ts; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build
 - Summary: 8 个契约测试通过；completed/verification、严格字段、安全错误与单向 Key 输入边界有效
 - Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task3-settings-security-gate
+- Type: automated-verification
+- Source: settingsService.test.ts; openAiCompatibleClient.test.ts; full lint/typecheck/test/build
+- Summary: 15 个定向/23 个全量测试通过；0600、加密/会话边界、Key 不回显、URL 与 HTTP 状态映射有效
+- Verifier: root coordinator

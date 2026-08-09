@@ -3,11 +3,11 @@
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
   "taskIntentRef": "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/task-intent-draft.json",
   "baselineRefs": [
-    "docs/aegis/specs/2026-08-09-bid-sentry-design.md"
+    "docs/aegis/plans/2026-08-09-m0-m1-foundation-sanitizer.md"
   ],
-  "scopeStatus": "Task 2 仅共享契约和测试；未接线 IPC、文件或业务逻辑",
-  "compatStatus": "schemaVersion 1；Main/Worker/Renderer 共享 Zod；完成状态以 passed verification 为事实来源",
-  "retirementStatus": "无旧契约；未添加兼容分支",
+  "scopeStatus": "Task 3 仅设置、密钥和 /models 连接测试；未发送文档或连接真实 API",
+  "compatStatus": "公开契约不返回已保存 Key；safeStorage 不可用时会话降级；HTTPS/环回 HTTP 边界保持",
+  "retirementStatus": "无旧密钥存储；无明文 fallback",
   "newRiskSignals": [],
   "decision": "continue"
 }

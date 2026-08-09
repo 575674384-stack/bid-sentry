@@ -47,3 +47,27 @@
 - task2-contract-gate
 - Blocked on: none
 - Next step: 实现密钥与设置所有者，使用内存/临时目录/MockAgent 测试，不接触真实 API
+
+## DriftCheckDraft
+
+- Scope status: Task 3 仅设置、密钥和 /models 连接测试；未发送文档或连接真实 API
+- Compatibility status: 公开契约不返回已保存 Key；safeStorage 不可用时会话降级；HTTPS/环回 HTTP 边界保持
+- Retirement status: 无旧密钥存储；无明文 fallback
+- New risk signals:
+- none
+- Advisory decision: continue
+
+## Checkpoint Update
+
+- Current todo: Task 4 实现输入快照、路径安全与原子输出
+- Active slice: Task 4：fileSafety 与 DocumentAdapter 契约
+- Completed todos:
+- Task 1 建立可构建的 Electron 安全骨架
+- Task 2 定义版本化共享契约与错误模型
+- Task 3 实现设置、安全密钥与 AI 连接测试
+- Evidence refs:
+- task1-quality-gate
+- task2-contract-gate
+- task3-settings-security-gate
+- Blocked on: none
+- Next step: 实现流式哈希、类型/符号链接/大小检查、临时目录、验证后原子 finalize 与受限清理
