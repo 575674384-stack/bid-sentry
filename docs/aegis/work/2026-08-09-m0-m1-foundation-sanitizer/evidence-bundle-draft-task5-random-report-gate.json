@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task5-random-report-gate",
+  "type": "automated-verification",
+  "source": "randomMapping.test.ts; report.test.ts; full lint/typecheck/test/build",
+  "summary": "7 个定向/40 个全量测试通过；CSPRNG 加盐映射、时间顺序、跨任务隔离、HTML 转义和无值报告有效",
+  "verifier": "root coordinator"
+}

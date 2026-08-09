@@ -97,3 +97,31 @@
 - task4-file-safety-gate
 - Blocked on: none
 - Next step: 实现 CSPRNG 类型化映射、顺序时间和 JSON/HTML 脱敏报告
+
+## DriftCheckDraft
+
+- Scope status: Task 5 仅随机策略和报告事实来源，未接触格式文件
+- Compatibility status: 同文件身份一致、跨文件独立；JSON 单一事实来源；报告无原值/随机值字段
+- Retirement status: 无旧随机策略或第二报告事实来源
+- New risk signals:
+- none
+- Advisory decision: continue
+
+## Checkpoint Update
+
+- Current todo: Task 6 实现 DOCX 安全适配器
+- Active slice: Task 6：受限 OOXML ZIP、元数据计划、定点改写与内容验证
+- Completed todos:
+- Task 1 建立可构建的 Electron 安全骨架
+- Task 2 定义版本化共享契约与错误模型
+- Task 3 实现设置、安全密钥与 AI 连接测试
+- Task 4 实现输入快照、路径安全与原子输出
+- Task 5 实现随机映射和脱敏报告
+- Evidence refs:
+- task1-quality-gate
+- task2-contract-gate
+- task3-settings-security-gate
+- task4-file-safety-gate
+- task5-random-report-gate
+- Blocked on: none
+- Next step: 先实现 archive 受限读写和合成夹具，再实现 metadata/sanitize/verify

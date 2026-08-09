@@ -191,4 +191,5 @@ export type VerificationReport = z.infer<typeof VerificationReportSchema>
 export type SanitizationPreview = z.infer<typeof SanitizationPreviewSchema>
 export type SanitizationCommand = z.infer<typeof SanitizationCommandSchema>
 export type TaskProgress = z.infer<typeof TaskProgressSchema>
+export type SanitizationFileResult = z.infer<typeof SanitizationFileResultSchema>
 export type SanitizationReport = z.infer<typeof SanitizationReportSchema>

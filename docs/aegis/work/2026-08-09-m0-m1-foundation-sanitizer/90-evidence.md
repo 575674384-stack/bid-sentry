@@ -33,3 +33,11 @@ No evidence has been recorded yet.
 - Source: fileSafety.test.ts; full lint/typecheck/test/build
 - Summary: 10 个文件安全/33 个全量测试通过；类型、符号链接、大小、哈希、无覆盖提交和受限清理边界有效
 - Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task5-random-report-gate
+- Type: automated-verification
+- Source: randomMapping.test.ts; report.test.ts; full lint/typecheck/test/build
+- Summary: 7 个定向/40 个全量测试通过；CSPRNG 加盐映射、时间顺序、跨任务隔离、HTML 转义和无值报告有效
+- Verifier: root coordinator

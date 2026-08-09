@@ -2,12 +2,13 @@
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
   "lastCheckpointRef": "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/todo-checkpoint-draft.json",
-  "resumeInstruction": "读取 checkpoint/计划；确认 HEAD 含 Task 4 提交；不得向 fileSafety 继续加入格式业务",
+  "resumeInstruction": "读取 checkpoint/计划；Task 6 命中 DOCX 停止条件，任何非目标部件漂移都必须停下",
   "knownPartialWork": [
     "Task 1 建立可构建的 Electron 安全骨架",
     "Task 2 定义版本化共享契约与错误模型",
     "Task 3 实现设置、安全密钥与 AI 连接测试",
-    "Task 4 实现输入快照、路径安全与原子输出"
+    "Task 4 实现输入快照、路径安全与原子输出",
+    "Task 5 实现随机映射和脱敏报告"
   ],
   "mustReadBeforeContinuing": [
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/10-intent.md",
@@ -15,6 +16,6 @@
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/todo-checkpoint-draft.json"
   ],
   "unsafeToAssume": [
-    "不得假设随机值可进入报告，也不得使用 Math.random 或原值作为可恢复映射键"
+    "不得假设 DOCX 是普通安全 ZIP、XML 可任意重序列化或所有自定义属性类型合法"
   ]
 }
