@@ -1,16 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import {
-  lstat,
-  link,
-  mkdtemp,
-  open,
-  realpath,
-  rm,
-  unlink
-} from 'node:fs/promises'
+import { lstat, link, mkdtemp, open, realpath, rm, unlink } from 'node:fs/promises'
 import { basename, dirname, extname, join, parse, resolve, sep } from 'node:path'
-import { DOMParser } from '@xmldom/xmldom'
+import { DOMParser, onWarningStopParsing } from '@xmldom/xmldom'
 import * as yauzl from 'yauzl'
 import {
   InputSnapshotSchema,
@@ -25,6 +17,8 @@ import {
 
 export const MAX_INPUT_BYTES = 200 * 1024 * 1024
 const MAX_MARKER_XML_BYTES = 1024 * 1024
+const CONTENT_TYPES_NS = 'http://schemas.openxmlformats.org/package/2006/content-types'
+const RELATIONSHIPS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships'
 const TEMPORARY_DIRECTORY_PREFIX = '.bid-sentry-tmp-'
 const TRUSTED_WORKSPACES = new WeakSet<TemporaryWorkspace>()
 
@@ -139,7 +133,9 @@ export async function sha256File(filePath: string, signal?: AbortSignal): Promis
   }
 }
 
-export async function createTemporaryWorkspace(outputDirectory: string): Promise<TemporaryWorkspace> {
+export async function createTemporaryWorkspace(
+  outputDirectory: string
+): Promise<TemporaryWorkspace> {
   const resolvedOutput = resolve(outputDirectory)
   const outputInfo = await lstat(resolvedOutput).catch((error: unknown) => {
     throw new DocumentSafetyError('INVALID_DOCUMENT', error)
@@ -367,9 +363,12 @@ function validateDocxMarkerXml(markerContents: ReadonlyMap<string, Buffer>): voi
     throw new DocumentSafetyError('INVALID_DOCUMENT')
   }
 
-  const parser = new DOMParser()
-  const contentTypes = parser.parseFromString(contentTypesSource.toString('utf8'), 'application/xml')
-  const overrides = Array.from(contentTypes.getElementsByTagNameNS('*', 'Override'))
+  const parser = new DOMParser({ onError: onWarningStopParsing })
+  const contentTypes = parser.parseFromString(
+    contentTypesSource.toString('utf8'),
+    'application/xml'
+  )
+  const overrides = Array.from(contentTypes.getElementsByTagNameNS(CONTENT_TYPES_NS, 'Override'))
   const hasWordMainType = overrides.some(
     (node) =>
       node.getAttribute('PartName') === '/word/document.xml' &&
@@ -377,16 +376,31 @@ function validateDocxMarkerXml(markerContents: ReadonlyMap<string, Buffer>): voi
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'
   )
 
-  const relationships = parser.parseFromString(relationshipsSource.toString('utf8'), 'application/xml')
-  const relationshipNodes = Array.from(relationships.getElementsByTagNameNS('*', 'Relationship'))
-  const hasOfficeDocumentRelationship = relationshipNodes.some(
+  const relationships = parser.parseFromString(
+    relationshipsSource.toString('utf8'),
+    'application/xml'
+  )
+  const relationshipNodes = Array.from(
+    relationships.getElementsByTagNameNS(RELATIONSHIPS_NS, 'Relationship')
+  )
+  const officeDocumentRelationships = relationshipNodes.filter(
+    (node) => node.getAttribute('Type')?.endsWith('/officeDocument') === true
+  )
+  const hasOfficeDocumentRelationship = officeDocumentRelationships.some(
     (node) =>
-      node.getAttribute('Type')?.endsWith('/officeDocument') === true &&
       node.getAttribute('Target')?.replace(/^\//u, '') === 'word/document.xml' &&
       node.getAttribute('TargetMode') !== 'External'
   )
 
-  if (!hasWordMainType || !hasOfficeDocumentRelationship) {
+  if (
+    contentTypes.documentElement?.namespaceURI !== CONTENT_TYPES_NS ||
+    contentTypes.documentElement.localName !== 'Types' ||
+    relationships.documentElement?.namespaceURI !== RELATIONSHIPS_NS ||
+    relationships.documentElement.localName !== 'Relationships' ||
+    !hasWordMainType ||
+    officeDocumentRelationships.length !== 1 ||
+    !hasOfficeDocumentRelationship
+  ) {
     throw new DocumentSafetyError('INVALID_DOCUMENT')
   }
 }

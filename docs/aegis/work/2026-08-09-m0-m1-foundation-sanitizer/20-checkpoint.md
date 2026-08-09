@@ -125,3 +125,63 @@
 - task5-random-report-gate
 - Blocked on: none
 - Next step: 先实现 archive 受限读写和合成夹具，再实现 metadata/sanitize/verify
+
+## Checkpoint Update
+
+- Current todo: Task 6 完成 DOCX 最终质量门与任务提交
+- Active slice: Task 6：复审已闭环，待全仓质量门与提交
+- Completed todos:
+- Task 1 建立可构建的 Electron 安全骨架
+- Task 2 定义版本化共享契约与错误模型
+- Task 3 实现设置、安全密钥与 AI 连接测试
+- Task 4 实现输入快照、路径安全与原子输出
+- Task 5 实现随机映射和脱敏报告
+- Evidence refs:
+- task1-quality-gate
+- task2-contract-gate
+- task3-settings-security-gate
+- task4-file-safety-gate
+- task5-random-report-gate
+- task6-docx-review-gate
+- Blocked on: none
+- Next step: 运行 focused/lint/typecheck/full test/build/format/diff 最终门，记录证据后仅提交 Task 6 路径
+
+## DriftCheckDraft
+
+- Scope status: Task 6 仍只实现 DOCX 元数据安全重置与内容验证，未进入 PDF/M2/M3/OCR
+- Compatibility status: 格式写入仍由 core/documents/docx 单一所有；外部关系保留并警告，危险 ZIP/OPC/签名/DOCM 拒绝，验证失败不保存
+- Retirement status: 无旧写入器、fallback 或最佳努力保存路径；宽松解析行为已原位替换
+- New risk signals:
+- 最终全仓质量门待运行
+- Advisory decision: needs-verification
+
+## Checkpoint Update
+
+- Current todo: Task 7 实现 PDF 安全适配器
+- Active slice: Task 7：PDF 签名/加密检测、元数据改写与结构指纹
+- Completed todos:
+- Task 1 建立可构建的 Electron 安全骨架
+- Task 2 定义版本化共享契约与错误模型
+- Task 3 实现设置、安全密钥与 AI 连接测试
+- Task 4 实现输入快照、路径安全与原子输出
+- Task 5 实现随机映射和脱敏报告
+- Task 6 实现 DOCX 安全适配器
+- Evidence refs:
+- task1-quality-gate
+- task2-contract-gate
+- task3-settings-security-gate
+- task4-file-safety-gate
+- task5-random-report-gate
+- task6-docx-review-gate
+- task6-docx-quality-gate
+- Blocked on: none
+- Next step: 按计划复核 pdf-lib 能力与 PDF 适配器最小边界，再实现合成夹具和定向验证
+
+## DriftCheckDraft
+
+- Scope status: Task 6 完成 DOCX 安全适配器，下一切片仅进入计划内 Task 7 PDF；未进入 M2/M3/OCR
+- Compatibility status: DOCX 原文件只读、批准字段随机化、签名/DOCM/危险包拒绝、内容验证后落盘；跨进程契约边界未提前接线
+- Retirement status: 无旧路径、并行写入器或 fallback；宽松 ZIP/OPC 行为已替换且回归覆盖
+- New risk signals:
+- 全仓 Prettier 检查仍报告 6 个未被 Task 6 修改的历史文件；Task 6 定向格式检查通过
+- Advisory decision: continue

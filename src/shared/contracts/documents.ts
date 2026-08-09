@@ -41,6 +41,7 @@ export const MetadataValueTypeSchema = z.enum([
   'initials',
   'organization',
   'integer',
+  'number',
   'boolean',
   'timestamp',
   'uuid'
@@ -59,4 +60,6 @@ export const MetadataFieldDescriptorSchema = z
 export type DocumentType = z.infer<typeof DocumentTypeSchema>
 export type InputSnapshot = z.infer<typeof InputSnapshotSchema>
 export type ReportFileIdentity = z.infer<typeof ReportFileIdentitySchema>
+export type MetadataFieldCategory = z.infer<typeof MetadataFieldCategorySchema>
+export type MetadataValueType = z.infer<typeof MetadataValueTypeSchema>
 export type MetadataFieldDescriptor = z.infer<typeof MetadataFieldDescriptorSchema>

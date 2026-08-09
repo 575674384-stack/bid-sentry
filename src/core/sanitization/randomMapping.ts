@@ -5,6 +5,7 @@ const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1_000
 export class TaskRandomMapping {
   readonly #salt = randomBytes(32)
   readonly #values = new Map<string, string | number | boolean>()
+  readonly #usedStringValues = new Map<string, Set<string>>()
   #destroyed = false
 
   constructor(private readonly now: () => number = Date.now) {}
@@ -17,12 +18,16 @@ export class TaskRandomMapping {
     return this.mapString(
       'initials',
       originalValue,
-      () => `${randomLetter()}${randomLetter()}`
+      () => `${randomLetter()}${randomLetter()}${randomLetter()}${randomLetter()}`
     )
   }
 
   organization(originalValue: string): string {
     return this.mapString('organization', originalValue, () => `Org-${randomToken(6)}`)
+  }
+
+  application(originalValue: string): string {
+    return this.mapString('application', originalValue, () => `App-${randomToken(6)}`)
   }
 
   description(originalValue: string): string {
@@ -34,12 +39,33 @@ export class TaskRandomMapping {
   }
 
   integer(originalValue: number): number {
-    const key = this.keyFor('integer', originalValue)
+    return this.integerInRange(String(originalValue), 1, 2_147_483_646)
+  }
+
+  integerInRange(originalValue: string, min: number, max: number): number {
+    if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max) || min > max) {
+      throw new RangeError('随机整数范围无效。')
+    }
+    const key = this.keyFor(`integer:${min}:${max}`, originalValue)
     const existing = this.#values.get(key)
     if (typeof existing === 'number') return existing
 
-    let generated = randomInt(1, 2_147_483_647)
-    if (generated === originalValue) generated = generated === 2_147_483_646 ? 1 : generated + 1
+    let generated = randomInt(min, max + 1)
+    if (String(generated) === originalValue.trim() && min < max) {
+      generated = generated === max ? min : generated + 1
+    }
+    this.#values.set(key, generated)
+    return generated
+  }
+
+  number(originalValue: number): number {
+    if (!Number.isFinite(originalValue)) throw new RangeError('原数值无效。')
+    const key = this.keyFor('number', originalValue)
+    const existing = this.#values.get(key)
+    if (typeof existing === 'number') return existing
+
+    let generated = randomInt(-100_000_000, 100_000_001) / 100
+    if (Object.is(generated, originalValue)) generated += 0.01
     this.#values.set(key, generated)
     return generated
   }
@@ -73,10 +99,12 @@ export class TaskRandomMapping {
 
     const now = Math.floor(this.now() / 1_000) * 1_000
     const lowerBound = now - ONE_YEAR_MS
-    const first = randomInt(lowerBound, now + 1)
-    const second = randomInt(lowerBound, now + 1)
-    const created = new Date(Math.min(first, second)).toISOString()
-    const modified = new Date(Math.max(first, second)).toISOString()
+    const { created, modified } = this.createDistinctTimestampPair(
+      createdOriginalValue,
+      modifiedOriginalValue,
+      lowerBound,
+      now
+    )
     this.#values.set(createdKey, created)
     this.#values.set(modifiedKey, modified)
     return { created, modified }
@@ -84,6 +112,7 @@ export class TaskRandomMapping {
 
   destroy(): void {
     this.#values.clear()
+    this.#usedStringValues.clear()
     this.#salt.fill(0)
     this.#destroyed = true
   }
@@ -93,9 +122,34 @@ export class TaskRandomMapping {
     const existing = this.#values.get(key)
     if (typeof existing === 'string') return existing
 
-    const generated = create()
-    this.#values.set(key, generated)
-    return generated
+    const used = this.#usedStringValues.get(kind) ?? new Set<string>()
+    this.#usedStringValues.set(kind, used)
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const generated = create()
+      if (generated === originalValue || used.has(generated)) continue
+      used.add(generated)
+      this.#values.set(key, generated)
+      return generated
+    }
+    throw new Error('无法生成唯一随机映射。')
+  }
+
+  private createDistinctTimestampPair(
+    createdOriginalValue: string,
+    modifiedOriginalValue: string,
+    lowerBound: number,
+    now: number
+  ): { created: string; modified: string } {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const first = randomInt(lowerBound, now + 1)
+      const second = randomInt(lowerBound, now + 1)
+      const created = new Date(Math.min(first, second)).toISOString()
+      const modified = new Date(Math.max(first, second)).toISOString()
+      if (created !== createdOriginalValue && modified !== modifiedOriginalValue) {
+        return { created, modified }
+      }
+    }
+    throw new Error('无法生成有序随机时间。')
   }
 
   private randomPastTimestamp(): string {

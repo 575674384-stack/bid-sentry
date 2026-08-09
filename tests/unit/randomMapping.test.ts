@@ -9,13 +9,15 @@ describe('TaskRandomMapping', () => {
     for (let index = 0; index < 1_000; index += 1) {
       const mapping = new TaskRandomMapping(() => NOW)
       expect(mapping.person('Alice')).toMatch(/^User-[A-F0-9]{12}$/u)
-      expect(mapping.initials('AL')).toMatch(/^[A-Z]{2}$/u)
+      expect(mapping.initials('AL')).toMatch(/^[A-Z]{4}$/u)
       expect(mapping.organization('Example Corp')).toMatch(/^Org-[A-F0-9]{12}$/u)
       expect(mapping.description('Sensitive description')).toMatch(/^Document-[A-F0-9]{16}$/u)
       expect(mapping.uuid('old-id')).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
       )
       expect(Number.isInteger(mapping.integer(10))).toBe(true)
+      expect(Number.isFinite(mapping.number(123.5))).toBe(true)
+      expect(mapping.number(123.5)).not.toBe(123.5)
       expect(mapping.boolean(true)).toBe(false)
 
       const timestamp = Date.parse(mapping.timestamp('old timestamp'))
@@ -34,6 +36,19 @@ describe('TaskRandomMapping', () => {
     expect(first.person('Alice')).not.toBe(second.person('Alice'))
   })
 
+  it('assigns distinct aliases to distinct identities within one task', () => {
+    const mapping = new TaskRandomMapping(() => NOW)
+    const people = new Set(
+      Array.from({ length: 1_000 }, (_, index) => mapping.person(`Person-${index}`))
+    )
+    const organizations = new Set(
+      Array.from({ length: 1_000 }, (_, index) => mapping.organization(`Organization-${index}`))
+    )
+
+    expect(people.size).toBe(1_000)
+    expect(organizations.size).toBe(1_000)
+  })
+
   it('generates ordered created and modified timestamps that are not in the future', () => {
     const mapping = new TaskRandomMapping(() => NOW)
     const pair = mapping.timestampPair('old created', 'old modified')
@@ -41,6 +56,12 @@ describe('TaskRandomMapping', () => {
     expect(Date.parse(pair.created)).toBeLessThanOrEqual(Date.parse(pair.modified))
     expect(Date.parse(pair.modified)).toBeLessThanOrEqual(NOW)
     expect(mapping.timestampPair('old created', 'old modified')).toEqual(pair)
+
+    const originalCreated = '2026-08-08T08:00:00.000Z'
+    const originalModified = '2026-08-08T09:00:00.000Z'
+    const distinctPair = mapping.timestampPair(originalCreated, originalModified)
+    expect(distinctPair.created).not.toBe(originalCreated)
+    expect(distinctPair.modified).not.toBe(originalModified)
   })
 
   it('does not expose original values through enumerable state and cannot be reused after destroy', () => {

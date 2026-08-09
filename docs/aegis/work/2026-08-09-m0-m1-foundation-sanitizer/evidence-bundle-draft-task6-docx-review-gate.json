@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task6-docx-review-gate",
+  "type": "advisory-code-review",
+  "source": "three findings-first read-only reviews; focused DOCX regression; TypeScript typecheck",
+  "summary": "最终复核为 0 Critical/Important/Minor；8 个 DOCX 集成测试与 typecheck 通过，关闭 VT namespace、ZIP 名、OPC 关系与别名唯一性缺口",
+  "verifier": "root coordinator and task6_code_review"
+}

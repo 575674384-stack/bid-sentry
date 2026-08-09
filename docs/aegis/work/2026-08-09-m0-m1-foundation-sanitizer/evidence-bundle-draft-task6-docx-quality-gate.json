@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task6-docx-quality-gate",
+  "type": "automated-verification",
+  "source": "docxSanitizer.test.ts; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build; task-scoped Prettier; git diff --check",
+  "summary": "8 个 DOCX 集成测试与 49 个全仓测试通过；lint/typecheck/build/Task 6 格式与补丁检查通过；严格 ZIP/OPC/XML、随机元数据、身份一致性和内容指纹边界有效",
+  "verifier": "root coordinator"
+}

@@ -23,3 +23,7 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task3-settings-security-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task3-settings-security-gate |
 | 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task4-file-safety-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task4-file-safety-gate |
 | 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task5-random-report-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task5-random-report-gate |
+| 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task6-docx-review-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task6-docx-review-gate |
+| 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/gate-input-pack.json | 2026-08-09-m0-m1-foundation-sanitizer gate input pack |
+| 2026-08-09 | work | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/proof-bundle.md | 2026-08-09-m0-m1-foundation-sanitizer proof bundle |
+| 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task6-docx-quality-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task6-docx-quality-gate |

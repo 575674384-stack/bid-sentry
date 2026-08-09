@@ -187,6 +187,7 @@ export const SanitizationReportSchema = z
   })
 
 export type TaskState = z.infer<typeof TaskStateSchema>
+export type VerificationCheck = z.infer<typeof VerificationCheckSchema>
 export type VerificationReport = z.infer<typeof VerificationReportSchema>
 export type SanitizationPreview = z.infer<typeof SanitizationPreviewSchema>
 export type SanitizationCommand = z.infer<typeof SanitizationCommandSchema>
