@@ -20,6 +20,7 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task1-quality-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-local-quality-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-review-gate.json
+- docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-windows-canonical-path-repair-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-workspace-identity-focused-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-workspace-identity-full-gate.json
 - docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task2-contract-gate.json
@@ -37,7 +38,7 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 
 ## Drift Check
 
-- Scope status: Task 10 M0-M1 发布安全修复和证据；未进入 M2/M3/OCR，也未触碰用户源文件
-- Compatibility status: Windows/Linux x64；exact bigint-derived identity 贯穿 workspace、hard-link attestation 与 rollback；用户替换对象保留
-- Retirement status: path-only cleanup、legacy path-only journal 和 number inode 比较均 delete-first 退休，无 fallback
+- Scope status: Task 10 Windows-host 测试契约修复；仅调整四个测试调用点，不修改生产路径、M2/M3/OCR 或用户文件
+- Compatibility status: Windows/Linux x64；测试现在消费 TemporaryWorkspace 的 canonical outputDirectory，生产 canonical-path 与 exact identity 守卫保持不变
+- Retirement status: 无新增 fallback、平台特判或第二 owner；错误的测试别名消费被原位替换
 - Advisory decision: needs-verification

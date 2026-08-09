@@ -8,11 +8,11 @@
     "docs/aegis/adr/ADR-0001-verified-document-publication.md",
     "docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md"
   ],
-  "scopeStatus": "Task 10 M0-M1 发布安全修复和证据；未进入 M2/M3/OCR，也未触碰用户源文件",
-  "compatStatus": "Windows/Linux x64；exact bigint-derived identity 贯穿 workspace、hard-link attestation 与 rollback；用户替换对象保留",
-  "retirementStatus": "path-only cleanup、legacy path-only journal 和 number inode 比较均 delete-first 退休，无 fallback",
+  "scopeStatus": "Task 10 Windows-host 测试契约修复；仅调整四个测试调用点，不修改生产路径、M2/M3/OCR 或用户文件",
+  "compatStatus": "Windows/Linux x64；测试现在消费 TemporaryWorkspace 的 canonical outputDirectory，生产 canonical-path 与 exact identity 守卫保持不变",
+  "retirementStatus": "无新增 fallback、平台特判或第二 owner；错误的测试别名消费被原位替换",
   "newRiskSignals": [
-    "仅最终 Windows-host 与双平台 CI/artifact 证据未完成"
+    "仅新 Windows/Linux CI 与最终 artifacts 未完成"
   ],
   "decision": "needs-verification"
 }

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task10-windows-canonical-path-repair-gate",
+  "type": "automated-debugging-verification",
+  "source": "GitHub Actions run 31326853393; focused fileSafety/validateExecutionResult Vitest; full local format/lint/typecheck/17-file Vitest/build",
+  "summary": "Windows CI exposed four test consumers using a non-canonical temp-directory alias after TemporaryWorkspace returned the verified canonical output directory. Updated only those test call sites to consume workspace.outputDirectory; production canonical-path guards stayed unchanged. Focused 2 files/21 tests and full local 17 files/131 tests passed; Linux job in the failed matrix completed all gates successfully. Final Windows rerun remains required.",
+  "verifier": "root coordinator"
+}

@@ -239,7 +239,7 @@ describe('immutable input and output boundaries', () => {
     const temporaryPath = await reserveTemporaryFile(workspace, 'input_sanitized.pdf')
     await writeFile(temporaryPath, '%PDF-1.7\nsanitized\n%%EOF', 'utf8')
     const outputSha256 = await sha256File(temporaryPath)
-    const outputPath = buildSanitizedOutputPath(inputPath, directory)
+    const outputPath = buildSanitizedOutputPath(inputPath, workspace.outputDirectory)
 
     await finalizeVerifiedOutput({
       workspace,
@@ -264,7 +264,7 @@ describe('immutable input and output boundaries', () => {
     const workspace = await createTemporaryWorkspace(directory)
     const temporaryPath = await reserveTemporaryFile(workspace, 'input_sanitized.pdf')
     await writeFile(temporaryPath, '%PDF-1.7\nsanitary output\n%%EOF', 'utf8')
-    const outputPath = buildSanitizedOutputPath(inputPath, directory)
+    const outputPath = buildSanitizedOutputPath(inputPath, workspace.outputDirectory)
     const published = await finalizeVerifiedOutput({
       workspace,
       input,
@@ -301,7 +301,7 @@ describe('immutable input and output boundaries', () => {
     const temporaryPath = await reserveTemporaryFile(workspace, 'input_sanitized.pdf')
     await writeFile(temporaryPath, '%PDF-1.7\nfirst\n%%EOF', 'utf8')
     const verifiedSha256 = await sha256File(temporaryPath)
-    const outputPath = buildSanitizedOutputPath(inputPath, directory)
+    const outputPath = buildSanitizedOutputPath(inputPath, workspace.outputDirectory)
 
     const failedVerification: VerificationReport = {
       schemaVersion: 1,

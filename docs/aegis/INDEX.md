@@ -39,3 +39,4 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-08-10 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-review-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task10-review-gate |
 | 2026-08-10 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-workspace-identity-focused-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task10-workspace-identity-focused-gate |
 | 2026-08-10 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-workspace-identity-full-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task10-workspace-identity-full-gate |
+| 2026-08-10 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task10-windows-canonical-path-repair-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task10-windows-canonical-path-repair-gate |

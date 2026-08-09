@@ -331,3 +331,26 @@
 - New risk signals:
 - 仅最终 Windows-host 与双平台 CI/artifact 证据未完成
 - Advisory decision: needs-verification
+
+## Checkpoint Update
+
+- Current todo: 推送 Windows canonical temp path 测试修复并重跑双平台 CI
+- Active slice: Task 10 Windows-host canonical path regression 修复与 CI 复验
+- Completed todos:
+- exact identity 修复已提交并推送为 bdbbbc2
+- GitHub Actions 31326853393 的 Linux x64 全链通过
+- Windows 临时目录别名导致的四个测试消费者漂移已定位并最小修复；本地完整门通过
+- Evidence refs:
+- task10-workspace-identity-full-gate
+- task10-windows-canonical-path-repair-gate
+- Blocked on: 最终 Windows x64 E2E、NSIS/portable、ASAR、packaged startup 和 artifacts 仍需新 CI
+- Next step: 精确提交两个测试文件和 Aegis 记录，推送 main，等待新 Linux/Windows CI
+
+## DriftCheckDraft
+
+- Scope status: Task 10 Windows-host 测试契约修复；仅调整四个测试调用点，不修改生产路径、M2/M3/OCR 或用户文件
+- Compatibility status: Windows/Linux x64；测试现在消费 TemporaryWorkspace 的 canonical outputDirectory，生产 canonical-path 与 exact identity 守卫保持不变
+- Retirement status: 无新增 fallback、平台特判或第二 owner；错误的测试别名消费被原位替换
+- New risk signals:
+- 仅新 Windows/Linux CI 与最终 artifacts 未完成
+- Advisory decision: needs-verification

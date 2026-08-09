@@ -137,3 +137,11 @@ No evidence has been recorded yet.
 - Source: Prettier; ESLint; Node/Web typecheck; 17-file Vitest; production build; Electron E2E; Linux package and ASAR audit; packaged startup; production audit; findings-first re-review
 - Summary: After exact bigint artifact identity repair: 17 files/131 passed, 1 Windows-only skipped on Linux; format/lint/typecheck/build passed; 4 Electron E2E passed; Linux AppImage/deb generated; final Linux ASAR audit and packaged production startup passed; production dependencies have no known vulnerabilities; independent re-review found no Critical/Important. Windows-host evidence remains pending.
 - Verifier: root coordinator and task6_code_review
+
+## EvidenceBundleDraft
+
+- Artifact key: task10-windows-canonical-path-repair-gate
+- Type: automated-debugging-verification
+- Source: GitHub Actions run 31326853393; focused fileSafety/validateExecutionResult Vitest; full local format/lint/typecheck/17-file Vitest/build
+- Summary: Windows CI exposed four test consumers using a non-canonical temp-directory alias after TemporaryWorkspace returned the verified canonical output directory. Updated only those test call sites to consume workspace.outputDirectory; production canonical-path guards stayed unchanged. Focused 2 files/21 tests and full local 17 files/131 tests passed; Linux job in the failed matrix completed all gates successfully. Final Windows rerun remains required.
+- Verifier: root coordinator

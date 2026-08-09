@@ -71,7 +71,7 @@ describe('Main execution artifact validation', () => {
     await expect(
       validateExecutionResultArtifacts({
         result,
-        outputDirectory,
+        outputDirectory: workspace.outputDirectory,
         workspaceRootPath: workspace.rootPath,
         logicalResultValid: true
       })
