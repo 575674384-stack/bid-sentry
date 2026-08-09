@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task4-file-safety-gate",
+  "type": "automated-verification",
+  "source": "fileSafety.test.ts; full lint/typecheck/test/build",
+  "summary": "10 个文件安全/33 个全量测试通过；类型、符号链接、大小、哈希、无覆盖提交和受限清理边界有效",
+  "verifier": "root coordinator"
+}

@@ -25,3 +25,11 @@ No evidence has been recorded yet.
 - Source: settingsService.test.ts; openAiCompatibleClient.test.ts; full lint/typecheck/test/build
 - Summary: 15 个定向/23 个全量测试通过；0600、加密/会话边界、Key 不回显、URL 与 HTTP 状态映射有效
 - Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task4-file-safety-gate
+- Type: automated-verification
+- Source: fileSafety.test.ts; full lint/typecheck/test/build
+- Summary: 10 个文件安全/33 个全量测试通过；类型、符号链接、大小、哈希、无覆盖提交和受限清理边界有效
+- Verifier: root coordinator

@@ -3,11 +3,13 @@
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
   "taskIntentRef": "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/task-intent-draft.json",
   "baselineRefs": [
-    "docs/aegis/plans/2026-08-09-m0-m1-foundation-sanitizer.md"
+    "docs/aegis/specs/2026-08-09-bid-sentry-design.md"
   ],
-  "scopeStatus": "Task 3 仅设置、密钥和 /models 连接测试；未发送文档或连接真实 API",
-  "compatStatus": "公开契约不返回已保存 Key；safeStorage 不可用时会话降级；HTTPS/环回 HTTP 边界保持",
-  "retirementStatus": "无旧密钥存储；无明文 fallback",
-  "newRiskSignals": [],
+  "scopeStatus": "Task 4 仅共享文件安全底座与适配器契约，未修改元数据",
+  "compatStatus": "DOCX/PDF 输入；原文件快照；同目录临时文件；passed verification 后无覆盖 hard-link finalize",
+  "retirementStatus": "无旧文件路径；无跳过验证或覆盖 fallback",
+  "newRiskSignals": [
+    "fileSafety.ts 为 411 行，低于 500 行提前拆分线；后续格式逻辑不得继续加入该文件"
+  ],
   "decision": "continue"
 }

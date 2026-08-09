@@ -71,3 +71,29 @@
 - task3-settings-security-gate
 - Blocked on: none
 - Next step: 实现流式哈希、类型/符号链接/大小检查、临时目录、验证后原子 finalize 与受限清理
+
+## DriftCheckDraft
+
+- Scope status: Task 4 仅共享文件安全底座与适配器契约，未修改元数据
+- Compatibility status: DOCX/PDF 输入；原文件快照；同目录临时文件；passed verification 后无覆盖 hard-link finalize
+- Retirement status: 无旧文件路径；无跳过验证或覆盖 fallback
+- New risk signals:
+- fileSafety.ts 为 411 行，低于 500 行提前拆分线；后续格式逻辑不得继续加入该文件
+- Advisory decision: continue
+
+## Checkpoint Update
+
+- Current todo: Task 5 实现随机映射和脱敏报告事实来源
+- Active slice: Task 5：randomMapping 与 report
+- Completed todos:
+- Task 1 建立可构建的 Electron 安全骨架
+- Task 2 定义版本化共享契约与错误模型
+- Task 3 实现设置、安全密钥与 AI 连接测试
+- Task 4 实现输入快照、路径安全与原子输出
+- Evidence refs:
+- task1-quality-gate
+- task2-contract-gate
+- task3-settings-security-gate
+- task4-file-safety-gate
+- Blocked on: none
+- Next step: 实现 CSPRNG 类型化映射、顺序时间和 JSON/HTML 脱敏报告

@@ -21,3 +21,4 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/resume-state-hint.json | 2026-08-09-m0-m1-foundation-sanitizer resume state hint |
 | 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task2-contract-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task2-contract-gate |
 | 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task3-settings-security-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task3-settings-security-gate |
+| 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task4-file-safety-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task4-file-safety-gate |
