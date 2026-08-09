@@ -24,6 +24,7 @@
     "src/worker/**/*.ts",
     "src/core/**/*.ts",
     "src/shared/**/*.ts",
+    "src/renderer/src/features/sanitizer/sanitizerState.ts",
     "tests/**/*.ts"
   ]
 }

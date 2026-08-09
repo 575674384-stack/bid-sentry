@@ -1,0 +1,135 @@
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  align-items: start;
+  gap: 18px;
+}
+
+.settings-loading {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.settings-form {
+  min-width: 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-field {
+  display: grid;
+  gap: 7px;
+}
+
+.form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-field > span {
+  color: #33475f;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.form-field input,
+.form-field select {
+  width: 100%;
+  min-height: 43px;
+  padding: 9px 11px;
+  border: 1px solid #cfd7e2;
+  border-radius: 9px;
+  color: #23344c;
+  background: #ffffff;
+  font-size: 13px;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  border-color: #7ca5fa;
+  box-shadow: 0 0 0 3px rgb(36 107 254 / 9%);
+}
+
+.form-field small {
+  color: #788497;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.clear-key-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 17px 0 0;
+  color: #56667c;
+  font-size: 12px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #e6e9ef;
+}
+
+.settings-aside {
+  display: grid;
+  gap: 14px;
+}
+
+.aside-card {
+  padding: 19px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.aside-card.accent {
+  border-color: #cbdafa;
+  background: linear-gradient(145deg, #f5f8ff, #edf3ff);
+}
+
+.aside-number {
+  display: inline-block;
+  margin-bottom: 17px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  color: #ffffff;
+  background: var(--blue);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.aside-card h3 {
+  margin: 0 0 8px;
+  color: #223750;
+  font-size: 14px;
+}
+
+.aside-card p,
+.aside-card li {
+  color: #657389;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.aside-card p {
+  margin: 0;
+}
+
+.aside-card ul {
+  margin: 0;
+  padding-left: 18px;
+}

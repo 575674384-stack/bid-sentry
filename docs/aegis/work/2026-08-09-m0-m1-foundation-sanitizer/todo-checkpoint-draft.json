@@ -1,18 +1,17 @@
 {
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
-  "currentTodo": "Task 9 实现清洗与设置用户界面",
+  "currentTodo": "Task 10 完成 E2E、双平台 CI、打包和 M1 文档",
   "completedTodos": [
-    "Task 1-7 基础设施、契约、安全事实来源和 DOCX/PDF 适配器",
-    "Task 8 清洗任务编排、Worker、IPC、恢复日志和两阶段验证发布"
+    "Task 1-8 基础设施、契约、安全、格式适配器与两阶段任务编排",
+    "Task 9 清洗与 AI 设置用户界面"
   ],
-  "activeSlice": "Task 9：Renderer API、清洗状态机、清洗页面和 AI 设置页",
+  "activeSlice": "Task 10：Electron E2E、测试夹具注入、CI、打包白名单、README 与 CONTRIBUTING",
   "evidenceRefs": [
-    "task8-review-gate",
-    "task8-quality-gate",
-    "docs/aegis/adr/ADR-0001-verified-document-publication.md"
+    "task9-quality-gate",
+    "task9-review-gate"
   ],
   "blockedOn": null,
-  "nextStep": "实现 Renderer 类型安全 API、纯 reducer/hook、清洗流程与设置表单，并运行 focused/full gates",
+  "nextStep": "提交 Task 9 后实现只在 BID_SENTRY_E2E=1 生效的测试注入与 Electron Playwright 路径",
   "updatedAt": "2026-08-09"
 }

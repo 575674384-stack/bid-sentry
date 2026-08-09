@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task9-quality-gate",
+  "type": "automated-verification",
+  "source": "sanitizerState.test.ts; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build; task-scoped Prettier; git diff --check",
+  "summary": "15 test files and 119 tests passed, including 16 Renderer state-machine regressions for legal/illegal transitions, stale and duplicate previews, cancellation, late progress, and verified-only completion; lint, Node/Web typecheck, all Electron builds, formatting, and diff checks passed",
+  "verifier": "root coordinator"
+}

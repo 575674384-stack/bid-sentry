@@ -242,3 +242,25 @@
 - docs/aegis/adr/ADR-0001-verified-document-publication.md
 - Blocked on: none
 - Next step: 实现 Renderer 类型安全 API、纯 reducer/hook、清洗流程与设置表单，并运行 focused/full gates
+
+## DriftCheckDraft
+
+- Scope status: Task 9 completes only the planned M1 sanitizer and AI settings Renderer; no OCR, M2, M3, server, database, telemetry, or updater
+- Compatibility status: Renderer revalidates shared schemas, never receives paths or saved API keys, preserves active tasks across navigation, requires explicit preview confirmation, and displays completion only for same-task passed verification
+- Retirement status: Task 1 placeholder UI was replaced; no fallback, duplicate completion owner, second writer, or stale conditional-unmount path remains
+- New risk signals:
+- Electron E2E, observed 1024x720 layout, Linux packaging, and Windows host evidence remain Task 10 gates
+- Advisory decision: continue
+
+## Checkpoint Update
+
+- Current todo: Task 10 完成 E2E、双平台 CI、打包和 M1 文档
+- Active slice: Task 10：Electron E2E、测试夹具注入、CI、打包白名单、README 与 CONTRIBUTING
+- Completed todos:
+- Task 1-8 基础设施、契约、安全、格式适配器与两阶段任务编排
+- Task 9 清洗与 AI 设置用户界面
+- Evidence refs:
+- task9-quality-gate
+- task9-review-gate
+- Blocked on: none
+- Next step: 提交 Task 9 后实现只在 BID_SENTRY_E2E=1 生效的测试注入与 Electron Playwright 路径

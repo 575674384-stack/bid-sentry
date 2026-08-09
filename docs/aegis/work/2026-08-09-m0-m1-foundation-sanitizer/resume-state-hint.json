@@ -2,10 +2,10 @@
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-09-m0-m1-foundation-sanitizer",
   "lastCheckpointRef": "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/todo-checkpoint-draft.json",
-  "resumeInstruction": "从 Task 9 approved plan 开始；先读取当前 shared IPC/settings/sanitization contracts，不改变 Task 8 完成权威",
+  "resumeInstruction": "从 Task 9 提交后的干净 main 开始；先复核 Task 10 计划与 Main 文件选择边界，再实现 E2E/CI/打包/文档",
   "knownPartialWork": [
-    "Task 1-7 基础设施、契约、安全事实来源和 DOCX/PDF 适配器",
-    "Task 8 清洗任务编排、Worker、IPC、恢复日志和两阶段验证发布"
+    "Task 1-8 基础设施、契约、安全、格式适配器与两阶段任务编排",
+    "Task 9 清洗与 AI 设置用户界面"
   ],
   "mustReadBeforeContinuing": [
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/10-intent.md",
@@ -13,6 +13,6 @@
     "docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/todo-checkpoint-draft.json"
   ],
   "unsafeToAssume": [
-    "Windows 已验证；真实 Office/PDF 阅读器兼容性已验证；Renderer 可直接使用路径或推断 completed"
+    "不得把 Linux 本机证据当作 Windows 证据，不得把测试夹具入口打入发布包，不得读取或打包 test-apikey.md"
   ]
 }

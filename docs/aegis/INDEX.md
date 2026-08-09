@@ -32,3 +32,5 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-08-09 | adr | docs/aegis/adr/ADR-0001-verified-document-publication.md | ADR-0001 - Main-owned verified document publication |
 | 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task8-review-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task8-review-gate |
 | 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task8-quality-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task8-quality-gate |
+| 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task9-quality-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task9-quality-gate |
+| 2026-08-09 | artifact | docs/aegis/work/2026-08-09-m0-m1-foundation-sanitizer/evidence-bundle-draft-task9-review-gate.json | 2026-08-09-m0-m1-foundation-sanitizer evidence task9-review-gate |

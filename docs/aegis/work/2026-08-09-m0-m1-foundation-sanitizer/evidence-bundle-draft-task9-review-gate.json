@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "task9-review-gate",
+  "type": "advisory-code-review",
+  "source": "findings-first working-tree review and focused lifecycle regressions",
+  "summary": "Final review 0 Critical/Important/Minor; closed page-unmount task loss, abandoned awaiting-preview concurrency, duplicate preview identities, and overlapping selection controls",
+  "verifier": "root coordinator and task6_code_review"
+}

@@ -89,3 +89,19 @@ No evidence has been recorded yet.
 - Source: focused regressions; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build; task-scoped Prettier; git diff --check
 - Summary: 14 test files and 103 tests passed; production Worker-to-Main workspace attestation, cancellation, crash, tampering, rollback, recovery, strict IPC, response/event budgets, and sensitive-file exclusion covered
 - Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task9-quality-gate
+- Type: automated-verification
+- Source: sanitizerState.test.ts; pnpm lint; pnpm typecheck; pnpm test --run; pnpm build; task-scoped Prettier; git diff --check
+- Summary: 15 test files and 119 tests passed, including 16 Renderer state-machine regressions for legal/illegal transitions, stale and duplicate previews, cancellation, late progress, and verified-only completion; lint, Node/Web typecheck, all Electron builds, formatting, and diff checks passed
+- Verifier: root coordinator
+
+## EvidenceBundleDraft
+
+- Artifact key: task9-review-gate
+- Type: advisory-code-review
+- Source: findings-first working-tree review and focused lifecycle regressions
+- Summary: Final review 0 Critical/Important/Minor; closed page-unmount task loss, abandoned awaiting-preview concurrency, duplicate preview identities, and overlapping selection controls
+- Verifier: root coordinator and task6_code_review
