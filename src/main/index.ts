@@ -163,11 +163,7 @@ async function startApplication(): Promise<void> {
     }
   })
   const window = createWindow(() => {
-    if (
-      (initialSettings.checkUpdatesOnStartup ?? true) &&
-      !e2eHarness &&
-      process.env.BID_SENTRY_DISABLE_UPDATES !== '1'
-    ) {
+    if ((initialSettings.checkUpdatesOnStartup ?? true) && !e2eHarness) {
       void updateService.check()
     }
   })

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
-import { mkdtemp, mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
@@ -235,6 +235,19 @@ test('launches the packaged production app without test harness', async () => {
   const root = await mkdtemp(join(tmpdir(), 'bid-sentry-packaged-e2e-'))
   const userDataDirectory = join(root, 'user-data')
   await mkdir(userDataDirectory, { recursive: true })
+  await writeFile(
+    join(userDataDirectory, 'settings.v2.json'),
+    `${JSON.stringify({
+      schemaVersion: 2,
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'synthetic-e2e-model',
+      timeoutMs: 15_000,
+      maxConcurrency: 1,
+      closeToTray: false,
+      checkUpdatesOnStartup: false
+    })}\n`,
+    { mode: 0o600 }
+  )
   let electronApp: ElectronApplication | null = null
 
   try {
@@ -362,8 +375,7 @@ function childEnvironment(additions: Record<string, string>): Record<string, str
     'TMP',
     'USERPROFILE',
     'XAUTHORITY',
-    'XDG_RUNTIME_DIR',
-    'BID_SENTRY_DISABLE_UPDATES'
+    'XDG_RUNTIME_DIR'
   ]
   const inherited = Object.fromEntries(
     inheritedNames.flatMap((name) => {
