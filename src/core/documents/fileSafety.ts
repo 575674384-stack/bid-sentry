@@ -478,6 +478,11 @@ export async function finalizeVerifiedOutput(options: {
     normalizeFileIdentity(dirname(resolve(outputPath))) !==
     normalizeFileIdentity(expectedOutputDirectory)
   ) {
+    if (process.env.BID_SENTRY_DIAG === '1') {
+      console.error(
+        `[DIAG] dirname(outputPath)=${JSON.stringify(dirname(resolve(outputPath)))} expected=${JSON.stringify(expectedOutputDirectory)} n1=${JSON.stringify(normalizeFileIdentity(dirname(resolve(outputPath))))} n2=${JSON.stringify(normalizeFileIdentity(expectedOutputDirectory))}`
+      )
+    }
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
   if (mode === 'overwrite' && resolve(outputPath) !== resolve(input.absolutePath)) {
