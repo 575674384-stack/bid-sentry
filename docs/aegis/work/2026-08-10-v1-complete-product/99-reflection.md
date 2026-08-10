@@ -56,3 +56,18 @@ change was needed, and the serial rerun passed.
 The release boundary is unchanged: Windows CI and manual Word/WPS/GUI PDF
 opening evidence remain unavailable here, so the version stays `0.1.0` until
 the exact implementation commit receives those checks.
+
+## Publication reflection (2026-08-10)
+
+The exact-tag Windows/Linux CI gate passed. The release workflow then exposed a
+real producer defect: PowerShell formatted `Get-FileHash` output using a
+nonexistent hash-object filename property, producing invalid Windows
+`SHA256SUMS`. The fix used the file object's explicit `FullName`/`Name` fields
+and UTF-8-without-BOM/LF output. A fresh Windows/Linux CI run passed after the
+fix. The already verified tag artifacts were independently rehashed and the
+public `v1.0.0` Release was published with nine verified assets.
+
+This closes the repository-side release work. Manual Word/WPS/GUI PDF opening
+and end-user workflow acceptance remain intentionally with the user because
+those applications are not installed in this host. OCR remains unsupported,
+and unsigned packages must be checked against `SHA256SUMS` before use.

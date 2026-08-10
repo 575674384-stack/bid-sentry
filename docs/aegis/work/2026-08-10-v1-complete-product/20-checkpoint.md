@@ -144,3 +144,27 @@
 - New risk signals:
 - Windows/Linux CI now passes for e46ada1; Word/WPS/GUI PDF manual evidence remains unavailable on this host
 - Advisory decision: needs-verification
+
+## Final coordinator release checkpoint (2026-08-10)
+
+- Current todo: Hand the published `v1.0.0` to the user for supported-host testing.
+- Active slice: `G5-release-verification` (publication complete).
+- Completed todos: exact-tag Windows/Linux CI, corrected Windows checksum
+  generation, release asset verification, and public GitHub Release publication.
+- Evidence refs: GitHub Actions CI `31378201124` and `31382358355`, release
+  workflow `31378546432` (diagnostic failure before publication), public
+  Release `v1.0.0`, and the latest section of `90-evidence.md`.
+- Blocked on: user-side Microsoft Word/WPS/GUI PDF-reader compatibility and
+  functional acceptance testing; those applications are unavailable here.
+- Next step: user downloads the signed-by-checksum (not code-signed) package,
+  verifies `SHA256SUMS`, and reports any product findings.
+
+### Final drift check
+
+- Scope status: aligned; OCR, hosted service, accounts, telemetry, silent
+  updates, and automatic bid-file modification remain out of scope.
+- Compatibility status: needs-user-verification for Word/WPS/GUI PDF opening;
+  Windows CI and package artifact checks are passed.
+- Retirement status: aligned; the malformed Windows checksum producer was
+  repaired at its canonical owner and no fallback parser was added.
+- Advisory decision: user-acceptance-testing.

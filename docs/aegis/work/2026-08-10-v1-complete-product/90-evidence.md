@@ -245,3 +245,27 @@ identity/hash attestation, exact journal recovery and pre-delete revalidation.
 - Source: GitHub Actions CI run 31369555001 (Windows job 93395253525; Linux job 93395253609)
 - Summary: Exact commit e46ada1 passed both Windows x64 and Linux x64 full test, package, ASAR audit, and packaged functional E2E gates.
 - Verifier: GitHub Actions 2026-08-10
+
+## Latest release verification (2026-08-10)
+
+The exact `v1.0.0` tag points to commit `8a27477e0533eab9f9d20af3bb710ba35757e4a0`.
+GitHub Actions CI run `31378201124` passed both Windows x64 and Linux x64
+jobs for that commit, including tests, packaging, package audit, and packaged
+functional E2E. The first release workflow run (`31378546432`) correctly
+stopped before publication when it found that the Windows artifact's
+`SHA256SUMS` contained hashes without filenames. The canonical CI owner was
+fixed in commit `6701efd8514a80b42abbc2397a0d63a21b16b4e8`; its exact-commit
+CI run `31382358355` passed both platform jobs.
+
+The release assets were rebuilt from the already verified `v1.0.0` artifacts,
+their metadata and SHA-256 values were checked locally, and the GitHub asset
+digests were compared byte-for-byte before publication. Public GitHub Release
+`v1.0.0` is now published with nine assets: Linux AppImage/DEB, Windows setup
+and portable installers, two update manifests, `LICENSE`, `SHA256SUMS`, and
+`release-manifest.json`.
+
+The release remains explicit about its compatibility boundary: OCR is not
+included; scan-PDF review/pre-production needs a reliable text layer; generated
+DOCX and AI findings require human review; and packages are unsigned. Word,
+WPS, and GUI PDF-reader opening checks remain unavailable on this host and are
+left for user testing.
