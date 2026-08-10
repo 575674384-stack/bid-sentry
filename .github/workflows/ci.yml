@@ -82,7 +82,14 @@ jobs:
         run: |
           $files = @(Get-ChildItem release -File | Where-Object { $_.Extension -in @('.exe', '.7z') -or $_.Name -like 'latest*.yml' })
           if ($files.Count -eq 0) { throw 'No Windows release assets were produced.' }
-          $files | Get-FileHash -Algorithm SHA256 | ForEach-Object { "{0}  {1}" -f $_.Hash.ToLowerInvariant(), $_.Name } | Set-Content -Encoding ascii release/SHA256SUMS
+          $lines = $files | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+            "{0}  {1}" -f $hash, $_.Name
+          }
+          # Write UTF-8 without BOM and LF line endings so Linux release checks
+          # and downstream sha256sum consumers parse the manifest identically.
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          [System.IO.File]::WriteAllText((Join-Path $PWD 'release/SHA256SUMS'), (($lines -join "`n") + "`n"), $utf8NoBom)
       - run: pnpm package:e2e:win
       - shell: pwsh
         run: |
