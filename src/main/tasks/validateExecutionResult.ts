@@ -10,7 +10,8 @@ import {
 } from '../../core/documents/fileSafety'
 import {
   fileSystemIdentityFromBigInts,
-  sameFileSystemIdentity
+  sameFileSystemIdentity,
+  sameRealPath
 } from '../../core/documents/pathSafety'
 import {
   renderSanitizationReportHtml,
@@ -42,7 +43,7 @@ export async function validateExecutionResultArtifacts(options: {
   workspaceRootPath: string
   logicalResultValid: boolean
 }): Promise<PublishedFile[]> {
-  const { artifacts: expected, declaredPathsMatch } = expectedArtifacts(options)
+  const { artifacts: expected, declaredPathsMatch } = await expectedArtifacts(options)
   const workspaceArtifacts = await readWorkspaceArtifacts(options.workspaceRootPath)
   const rollbackCandidates: PublishedFile[] = []
   const validationErrors: unknown[] = []
@@ -95,10 +96,10 @@ export async function validateExecutionResultArtifacts(options: {
   )
 }
 
-function expectedArtifacts(options: {
+async function expectedArtifacts(options: {
   result: WorkerExecutionResult
   outputDirectories: string[]
-}): { artifacts: ExpectedArtifact[]; declaredPathsMatch: boolean } {
+}): Promise<{ artifacts: ExpectedArtifact[]; declaredPathsMatch: boolean }> {
   const reportDirectory = resolve(options.outputDirectories[0] ?? '')
   const expectedDirectories = options.outputDirectories.map((directory) => resolve(directory))
   const safeDisplayNames = options.result.report.files.every(
@@ -124,22 +125,16 @@ function expectedArtifacts(options: {
   const declaredDocumentPathsMatch =
     safeDisplayNames &&
     canonicalDocumentPaths.length === options.result.outputPaths.length &&
-    canonicalDocumentPaths.every(
-      (canonicalPath, index) =>
-        normalizeFileIdentity(canonicalPath) ===
-          normalizeFileIdentity(options.result.outputPaths[index] as string) &&
-        normalizeFileIdentity(dirname(resolve(canonicalPath))) ===
-          normalizeFileIdentity(expectedDirectories[index] as string)
-    )
+    (await declaredDocumentsMatch(
+      canonicalDocumentPaths,
+      options.result.outputPaths,
+      expectedDirectories
+    ))
   const declaredReportPathsMatch =
-    normalizeFileIdentity(canonicalReportPaths.json) ===
-      normalizeFileIdentity(options.result.jsonReportPath) &&
-    normalizeFileIdentity(dirname(resolve(canonicalReportPaths.json))) ===
-      normalizeFileIdentity(reportDirectory) &&
-    normalizeFileIdentity(canonicalReportPaths.html) ===
-      normalizeFileIdentity(options.result.htmlReportPath) &&
-    normalizeFileIdentity(dirname(resolve(canonicalReportPaths.html))) ===
-      normalizeFileIdentity(reportDirectory)
+    (await sameRealPath(canonicalReportPaths.json, options.result.jsonReportPath)) &&
+    (await sameRealPath(dirname(resolve(canonicalReportPaths.json)), reportDirectory)) &&
+    (await sameRealPath(canonicalReportPaths.html, options.result.htmlReportPath)) &&
+    (await sameRealPath(dirname(resolve(canonicalReportPaths.html)), reportDirectory))
   const declaredPathsMatch =
     declaredDocumentPathsMatch &&
     declaredReportPathsMatch &&
@@ -172,6 +167,23 @@ function expectedTextArtifact(finalPath: string, contents: Buffer): ExpectedArti
     size: contents.byteLength,
     sha256: createHash('sha256').update(contents).digest('hex')
   }
+}
+
+async function declaredDocumentsMatch(
+  canonicalDocumentPaths: readonly string[],
+  declaredOutputPaths: readonly string[],
+  expectedDirectories: readonly string[]
+): Promise<boolean> {
+  for (const [index, canonicalPath] of canonicalDocumentPaths.entries()) {
+    const declaredPath = declaredOutputPaths[index] as string
+    if (
+      !(await sameRealPath(canonicalPath, declaredPath)) ||
+      !(await sameRealPath(dirname(resolve(canonicalPath)), expectedDirectories[index] as string))
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 async function validateArtifact(

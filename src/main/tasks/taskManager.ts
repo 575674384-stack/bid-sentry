@@ -24,11 +24,10 @@ import {
   DocumentSafetyError,
   cleanupAbandonedTemporaryWorkspace,
   createTemporaryWorkspace,
-  normalizeFileIdentity,
   rollbackPublishedFiles,
   type PublishedFile
 } from '../../core/documents/fileSafety'
-import { sameFileSystemIdentity } from '../../core/documents/pathSafety'
+import { sameFileSystemIdentity, sameRealPath } from '../../core/documents/pathSafety'
 import { resolvePathIdentityWithoutSymbolicLinks } from '../../core/documents/pathSafety'
 import { aggregateVerification } from '../../core/sanitization/verificationSummary'
 import { validateExecutionResultArtifacts } from './validateExecutionResult'
@@ -302,7 +301,7 @@ export class TaskManager {
       record.state === 'completed' &&
       Boolean(record.execution) &&
       Boolean(record.pendingCompletion) &&
-      this.#executionResultMatches(record, message.result)
+      (await this.#executionResultMatches(record, message.result))
     let publishedFiles: PublishedFile[] = []
     if (record.execution && record.workspace) {
       try {
@@ -385,11 +384,9 @@ export class TaskManager {
         return
       }
       if (
-        normalizeFileIdentity(workspace.outputDirectory) !==
-          normalizeFileIdentity(inputDirectories[0] as string) ||
+        !(await sameRealPath(workspace.outputDirectory, inputDirectories[0] as string)) ||
         !sameFileSystemIdentity(workspace.outputDirectoryIdentity, inputDirectoryIdentity) ||
-        normalizeFileIdentity(dirname(resolve(workspace.rootPath))) !==
-          normalizeFileIdentity(inputDirectories[0] as string) ||
+        !(await sameRealPath(dirname(resolve(workspace.rootPath)), inputDirectories[0] as string)) ||
         !basename(resolve(workspace.rootPath)).startsWith('.bid-sentry-tmp-')
       ) {
         await this.#cleanupWorkspace(workspace).catch(() => undefined)
@@ -478,7 +475,7 @@ export class TaskManager {
     }
   }
 
-  #executionResultMatches(record: TaskRecord, result: WorkerExecutionResult): boolean {
+  async #executionResultMatches(record: TaskRecord, result: WorkerExecutionResult): Promise<boolean> {
     const expectedDirectories = record.inputDirectories
     const completionVerification = record.pendingCompletion?.verification
     const reportVerification = aggregateVerification(
@@ -493,23 +490,25 @@ export class TaskManager {
     ) {
       return false
     }
-    if (
-      result.outputPaths.some(
-        (outputPath, index) =>
-          normalizeFileIdentity(dirname(resolve(outputPath))) !==
-            normalizeFileIdentity(expectedDirectories[index] as string) ||
-          basename(outputPath) !== result.report.files[index]?.outputDisplayName
-      )
-    ) {
-      return false
+    for (const [index, outputPath] of result.outputPaths.entries()) {
+      if (
+        !(await sameRealPath(
+          dirname(resolve(outputPath)),
+          expectedDirectories[index] as string
+        )) ||
+        basename(outputPath) !== result.report.files[index]?.outputDisplayName
+      ) {
+        return false
+      }
     }
     const reportDirectory = expectedDirectories[0]
     if (!reportDirectory) return false
-    return [result.jsonReportPath, result.htmlReportPath].every(
-      (reportPath) =>
-        normalizeFileIdentity(dirname(resolve(reportPath))) ===
-        normalizeFileIdentity(reportDirectory)
-    )
+    for (const reportPath of [result.jsonReportPath, result.htmlReportPath]) {
+      if (!(await sameRealPath(dirname(resolve(reportPath)), reportDirectory))) {
+        return false
+      }
+    }
+    return true
   }
 
   #armOperationTimer(record: TaskRecord): void {

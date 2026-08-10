@@ -26,7 +26,8 @@ import {
   normalizeFileIdentity,
   resolvePathIdentityWithoutSymbolicLinks,
   resolvePathWithoutSymbolicLinks,
-  sameFileSystemIdentity
+  sameFileSystemIdentity,
+  sameRealPath
 } from './pathSafety'
 
 export { normalizeFileIdentity } from './pathSafety'
@@ -474,18 +475,10 @@ export async function finalizeVerifiedOutput(options: {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
   const expectedOutputDirectory = resolve(options.outputDirectory ?? workspace.outputDirectory)
-  if (
-    normalizeFileIdentity(dirname(resolve(outputPath))) !==
-    normalizeFileIdentity(expectedOutputDirectory)
-  ) {
-    if (process.env.BID_SENTRY_DIAG === '1') {
-      console.error(
-        `[DIAG] dirname(outputPath)=${JSON.stringify(dirname(resolve(outputPath)))} expected=${JSON.stringify(expectedOutputDirectory)} n1=${JSON.stringify(normalizeFileIdentity(dirname(resolve(outputPath))))} n2=${JSON.stringify(normalizeFileIdentity(expectedOutputDirectory))}`
-      )
-    }
+  if (!(await sameRealPath(dirname(resolve(outputPath)), expectedOutputDirectory))) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
-  if (mode === 'overwrite' && resolve(outputPath) !== resolve(input.absolutePath)) {
+  if (mode === 'overwrite' && !(await sameRealPath(resolve(outputPath), input.absolutePath))) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
   const temporaryInfo = await lstat(temporaryPath, { bigint: true })
@@ -526,8 +519,7 @@ export async function publishReservedWorkspaceFile(options: {
   const expectedOutputDirectory = resolve(options.outputDirectory ?? workspace.outputDirectory)
   if (
     !workspace.contains(temporaryPath) ||
-    normalizeFileIdentity(dirname(resolve(outputPath))) !==
-      normalizeFileIdentity(expectedOutputDirectory)
+    !(await sameRealPath(dirname(resolve(outputPath)), expectedOutputDirectory))
   ) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
