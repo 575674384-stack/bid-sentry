@@ -1,18 +1,22 @@
 {
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-10-v1-complete-product",
-  "currentTodo": "Obtain Windows CI evidence, finish the documented manual compatibility boundary, then perform the single v1.0.0 release",
+  "currentTodo": "Finish manual compatibility evidence, then perform the single v1.0.0 release",
   "completedTodos": [
-    "Latest local quality gate (30 files, 191 passed, 1 skipped), serial Electron E2E, Linux package/audit/startup, packaged functional E2E, live AI compatibility, documentation and independent review"
+    "Latest local quality gate (30 files, 192 passed, 1 skipped), serial Electron E2E, Linux package/audit/startup, packaged functional E2E, live AI compatibility, documentation and independent review",
+    "Exact commit e46ada1 Windows/Linux CI full gates passed"
   ],
   "activeSlice": "G5-release-verification",
   "evidenceRefs": [
+    "docs/aegis/work/2026-08-10-v1-complete-product/90-evidence.md",
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-local-quality-gate-final.json",
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-linux-package-final.json",
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-packaged-functional-e2e-final.json",
-    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-independent-review-final.json"
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-independent-review-final.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-windows-ci-e46ada1.json",
+    "GitHub Actions run 31369555001"
   ],
-  "blockedOn": "Windows CI has not yet run for the final implementation commit; Word/WPS/PDF GUI applications are unavailable on this host",
-  "nextStep": "Update evidence and ADR records, commit the verified 0.1.0 implementation, push main, wait for the exact-commit CI result, then bump only to 1.0.0 and tag/release",
+  "blockedOn": "Microsoft Word, WPS, and GUI PDF reader opening checks are unavailable on this host",
+  "nextStep": "Obtain supported-host manual opening records or stop and request the missing evidence; keep version 0.1.0 and no tag/Release until the G5 gate is satisfied",
   "updatedAt": "2026-08-10"
 }

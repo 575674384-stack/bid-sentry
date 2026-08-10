@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "windows-ci-e46ada1",
+  "type": "command",
+  "source": "GitHub Actions CI run 31369555001 (Windows job 93395253525; Linux job 93395253609)",
+  "summary": "Exact commit e46ada1 passed both Windows x64 and Linux x64 full test, package, ASAR audit, and packaged functional E2E gates.",
+  "verifier": "GitHub Actions 2026-08-10"
+}

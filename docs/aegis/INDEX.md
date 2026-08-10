@@ -72,3 +72,4 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-live-ai-compatibility-final.json | 2026-08-10-v1-complete-product evidence live-ai-compatibility-final |
 | 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-libreoffice-compatibility.json | 2026-08-10-v1-complete-product evidence libreoffice-compatibility |
 | 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-independent-review-final.json | 2026-08-10-v1-complete-product evidence independent-review-final |
+| 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-windows-ci-e46ada1.json | 2026-08-10-v1-complete-product evidence windows-ci-e46ada1 |

@@ -123,3 +123,24 @@
 - Windows CI for the final implementation commit is still pending.
 - Word/WPS/PDF GUI manual opening cannot run on this host; LibreOffice headless conversion passed.
 - Advisory decision: needs-verification
+
+## Checkpoint Update
+
+- Current todo: Finish manual compatibility evidence, then perform the single v1.0.0 release
+- Active slice: G5-release-verification
+- Completed todos:
+- Exact commit e46ada1 Windows/Linux CI full gates passed
+- Evidence refs:
+- docs/aegis/work/2026-08-10-v1-complete-product/90-evidence.md
+- GitHub Actions run 31369555001
+- Blocked on: Microsoft Word, WPS, and GUI PDF reader opening checks are unavailable on this host
+- Next step: Obtain supported-host manual opening records or stop and request the missing evidence; keep version 0.1.0 and no tag/Release until the G5 gate is satisfied
+
+## DriftCheckDraft
+
+- Scope status: aligned
+- Compatibility status: needs-verification
+- Retirement status: aligned
+- New risk signals:
+- Windows/Linux CI now passes for e46ada1; Word/WPS/GUI PDF manual evidence remains unavailable on this host
+- Advisory decision: needs-verification

@@ -5,14 +5,14 @@
   "baselineRefs": [
     "docs/aegis/specs/2026-08-09-bid-sentry-design.md",
     "docs/aegis/adr/ADR-0001-verified-document-publication.md",
-    "docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md"
+    "docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md",
+    "docs/aegis/plans/2026-08-10-v1-complete-product.md"
   ],
   "scopeStatus": "aligned",
   "compatStatus": "needs-verification",
   "retirementStatus": "aligned",
   "newRiskSignals": [
-    "Windows CI for the final implementation commit is still pending.",
-    "Word/WPS/PDF GUI manual opening cannot run on this host; LibreOffice headless conversion passed."
+    "Windows/Linux CI now passes for e46ada1; Word/WPS/GUI PDF manual evidence remains unavailable on this host"
   ],
   "decision": "needs-verification"
 }

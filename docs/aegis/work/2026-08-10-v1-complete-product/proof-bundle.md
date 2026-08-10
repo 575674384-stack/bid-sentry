@@ -39,6 +39,7 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-packaged-functional-e2e.json
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-pdf-text-layer.json
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-updater-boundaries.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-windows-ci-e46ada1.json
 
 ## Drift Check
 

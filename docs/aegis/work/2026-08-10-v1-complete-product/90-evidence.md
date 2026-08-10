@@ -237,3 +237,11 @@ identity/hash attestation, exact journal recovery and pre-delete revalidation.
 - Source: Independent task6_code_review review of current worktree
 - Summary: No unresolved Critical/Important findings reported; Windows hard-link behavior remains a CI evidence boundary.
 - Verifier: coordinator main-worktree verification 2026-08-10
+
+## EvidenceBundleDraft
+
+- Artifact key: windows-ci-e46ada1
+- Type: command
+- Source: GitHub Actions CI run 31369555001 (Windows job 93395253525; Linux job 93395253609)
+- Summary: Exact commit e46ada1 passed both Windows x64 and Linux x64 full test, package, ASAR audit, and packaged functional E2E gates.
+- Verifier: GitHub Actions 2026-08-10
