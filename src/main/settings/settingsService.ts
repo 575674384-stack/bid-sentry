@@ -8,31 +8,70 @@ import {
   type AiSettings,
   type AiSettingsUpdate
 } from '../../shared/contracts/settings'
-import { APP_SETTINGS_SCHEMA_VERSION } from '../../shared/contracts/appSettings'
+import {
+  APP_SETTINGS_SCHEMA_VERSION,
+  CompanyProfileSchema,
+  DEFAULT_OUTPUT_SUFFIX,
+  OutputModeSchema,
+  OutputSuffixSchema,
+  type CompanyProfile,
+  type OutputMode
+} from '../../shared/contracts/appSettings'
 import type { SecretStore } from './secretStore'
 
 const StoredSettingsSchema = z
   .object({
-    schemaVersion: z.union([z.literal(1), z.literal(APP_SETTINGS_SCHEMA_VERSION)]),
+    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(APP_SETTINGS_SCHEMA_VERSION)]),
     baseUrl: z.string().url().max(2_048),
     model: z.string().trim().min(1).max(200),
     timeoutMs: z.number().int().min(5_000).max(120_000),
     maxConcurrency: z.number().int().min(1).max(4),
     closeToTray: z.boolean().optional(),
-    checkUpdatesOnStartup: z.boolean().optional()
+    checkUpdatesOnStartup: z.boolean().optional(),
+    outputMode: OutputModeSchema.optional(),
+    outputSuffix: OutputSuffixSchema.optional(),
+    companyProfile: CompanyProfileSchema.optional()
   })
   .strict()
 
 type StoredSettings = z.infer<typeof StoredSettingsSchema>
 
-const DEFAULT_SETTINGS: StoredSettings = Object.freeze({
+/** The on-disk shape after normalization: every v3 field is always present. */
+interface NormalizedSettings {
+  schemaVersion: typeof APP_SETTINGS_SCHEMA_VERSION
+  baseUrl: string
+  model: string
+  timeoutMs: number
+  maxConcurrency: number
+  closeToTray: boolean
+  checkUpdatesOnStartup: boolean
+  outputMode: OutputMode
+  outputSuffix: string
+  companyProfile: CompanyProfile
+}
+
+const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
+  bidderName: '',
+  unifiedSocialCreditCode: '',
+  address: '',
+  legalRepresentative: '',
+  authorizedRepresentative: '',
+  contact: '',
+  phone: '',
+  email: ''
+}
+
+const DEFAULT_SETTINGS: NormalizedSettings = Object.freeze({
   schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
   baseUrl: 'https://api.openai.com/v1',
   model: 'gpt-5-mini',
   timeoutMs: 15_000,
   maxConcurrency: 1,
   closeToTray: false,
-  checkUpdatesOnStartup: true
+  checkUpdatesOnStartup: true,
+  outputMode: 'suffix',
+  outputSuffix: DEFAULT_OUTPUT_SUFFIX,
+  companyProfile: DEFAULT_COMPANY_PROFILE
 })
 
 export class SettingsService {
@@ -49,8 +88,6 @@ export class SettingsService {
     return AiSettingsSchema.parse({
       ...stored,
       schemaVersion: 1,
-      closeToTray: stored.closeToTray ?? false,
-      checkUpdatesOnStartup: stored.checkUpdatesOnStartup ?? true,
       hasApiKey: Boolean(apiKey),
       secretPersistence: this.secretStore.persistence
     })
@@ -64,8 +101,11 @@ export class SettingsService {
       model: update.model.trim(),
       timeoutMs: update.timeoutMs,
       maxConcurrency: update.maxConcurrency,
-      closeToTray: update.closeToTray ?? false,
-      checkUpdatesOnStartup: update.checkUpdatesOnStartup ?? true
+      closeToTray: update.closeToTray,
+      checkUpdatesOnStartup: update.checkUpdatesOnStartup,
+      outputMode: update.outputMode,
+      outputSuffix: update.outputSuffix,
+      companyProfile: update.companyProfile
     })
 
     if (update.clearApiKey) {
@@ -82,7 +122,7 @@ export class SettingsService {
     return this.secretStore.getApiKey()
   }
 
-  private async readStoredSettings(): Promise<StoredSettings> {
+  private async readStoredSettings(): Promise<NormalizedSettings> {
     try {
       const source = await readFile(this.settingsPath, 'utf8')
       const parsed = StoredSettingsSchema.safeParse(JSON.parse(source) as unknown)
@@ -129,7 +169,7 @@ export class SettingsService {
   }
 }
 
-function normalizeStoredSettings(settings: StoredSettings): StoredSettings {
+function normalizeStoredSettings(settings: StoredSettings): NormalizedSettings {
   return {
     schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
     baseUrl: settings.baseUrl,
@@ -137,8 +177,15 @@ function normalizeStoredSettings(settings: StoredSettings): StoredSettings {
     timeoutMs: settings.timeoutMs,
     maxConcurrency: settings.maxConcurrency,
     closeToTray: settings.closeToTray ?? false,
-    checkUpdatesOnStartup: settings.checkUpdatesOnStartup ?? true
+    checkUpdatesOnStartup: settings.checkUpdatesOnStartup ?? true,
+    outputMode: settings.outputMode ?? 'suffix',
+    outputSuffix: settings.outputSuffix ?? DEFAULT_OUTPUT_SUFFIX,
+    companyProfile: normalizeCompanyProfile(settings.companyProfile)
   }
+}
+
+function normalizeCompanyProfile(profile: CompanyProfile | undefined): CompanyProfile {
+  return { ...DEFAULT_COMPANY_PROFILE, ...profile }
 }
 
 export function normalizeAiBaseUrl(value: string): string {

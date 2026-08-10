@@ -3,7 +3,6 @@ import type {
   SanitizationPreview,
   SanitizationTaskResult,
   SelectedInputFile,
-  SelectedOutputDirectory,
   TaskProgress
 } from '../../../../shared/contracts'
 
@@ -21,7 +20,6 @@ export type SanitizerStage =
 export interface SanitizerState {
   stage: SanitizerStage
   files: SelectedInputFile[]
-  outputDirectory: SelectedOutputDirectory | null
   preview: SanitizationPreview | null
   result: SanitizationTaskResult | null
   progress: number
@@ -36,7 +34,7 @@ export type SanitizerAction =
   | { type: 'selection-started' }
   | { type: 'selection-cancelled' }
   | { type: 'files-selected'; files: SelectedInputFile[] }
-  | { type: 'output-selected'; directory: SelectedOutputDirectory }
+  | { type: 'file-removed'; inputId: string }
   | { type: 'preview-started' }
   | { type: 'preview-succeeded'; preview: SanitizationPreview }
   | { type: 'acknowledgement-changed'; acknowledged: boolean }
@@ -51,11 +49,10 @@ export type SanitizerAction =
 export const initialSanitizerState: SanitizerState = {
   stage: 'idle',
   files: [],
-  outputDirectory: null,
   preview: null,
   result: null,
   progress: 0,
-  progressMessage: '请选择需要处理的文件。',
+  progressMessage: '请选择需要清洗的文件。',
   acknowledged: false,
   cancelling: false,
   errorMessage: null
@@ -86,12 +83,15 @@ export function sanitizerReducer(state: SanitizerState, action: SanitizerAction)
       return {
         ...initialSanitizerState,
         files: [...action.files],
-        outputDirectory: state.outputDirectory,
-        progressMessage: '文件已选择，可以开始安全预览。'
+        progressMessage: '文件已就绪，可以生成安全预览。'
       }
-    case 'output-selected':
-      if (BUSY_STAGES.includes(state.stage)) return state
-      return { ...state, outputDirectory: action.directory, errorMessage: null }
+    case 'file-removed': {
+      if (state.stage !== 'idle') return state
+      const files = state.files.filter((file) => file.inputId !== action.inputId)
+      if (files.length === state.files.length) return state
+      if (files.length === 0) return initialSanitizerState
+      return { ...state, files, errorMessage: null }
+    }
     case 'preview-started':
       if (state.files.length === 0 || state.stage !== 'idle') return state
       return {
@@ -120,7 +120,7 @@ export function sanitizerReducer(state: SanitizerState, action: SanitizerAction)
         stage: 'awaiting-confirmation',
         preview: action.preview,
         progress: 0,
-        progressMessage: '预览已生成，请检查后明确确认。'
+        progressMessage: '预览已生成，请逐项核对后明确确认。'
       }
     case 'acknowledgement-changed':
       if (state.stage !== 'awaiting-confirmation') return state
@@ -129,7 +129,6 @@ export function sanitizerReducer(state: SanitizerState, action: SanitizerAction)
       if (
         state.stage !== 'awaiting-confirmation' ||
         !state.acknowledged ||
-        !state.outputDirectory ||
         hasBlockers(state.preview)
       ) {
         return state
@@ -248,6 +247,10 @@ export function sanitizerReducer(state: SanitizerState, action: SanitizerAction)
 
 export function hasBlockers(preview: SanitizationPreview | null): boolean {
   return !preview || preview.files.some((file) => file.blockers.length > 0)
+}
+
+export function isBusyStage(stage: SanitizerStage): boolean {
+  return BUSY_STAGES.includes(stage)
 }
 
 function matchesSelection(state: SanitizerState, preview: SanitizationPreview): boolean {

@@ -1,145 +1,131 @@
 import { useState } from 'react'
+import { IconCompare, IconDocSpark, IconGear, IconShield } from './components/icons'
 import { SanitizerPage } from './features/sanitizer/SanitizerPage'
-import { SettingsPage } from './features/settings/SettingsPage'
 import { ReviewPage } from './features/review/ReviewPage'
 import { GenerationPage } from './features/generation/GenerationPage'
+import { SettingsPage } from './features/settings/SettingsPage'
+import { SidebarUpdateBadge } from './features/updates/UpdateStatus'
 
 declare const __BID_SENTRY_VERSION__: string
 
 type Page = 'sanitizer' | 'review' | 'generation' | 'settings'
 
-const PAGE_COPY: Readonly<Record<Page, { eyebrow: string; title: string; description: string }>> = {
+interface PageMeta {
+  readonly label: string
+  readonly eyebrow: string
+  readonly title: string
+  readonly description: string
+  readonly icon: (props: { size?: number }) => React.JSX.Element
+}
+
+const PAGES: Readonly<Record<Page, PageMeta>> = {
   sanitizer: {
-    eyebrow: '元数据安全重置',
-    title: '清洗文档隐藏信息',
-    description: '生成经过结构与内容验证的新副本，原文件始终只读。'
-  },
-  settings: {
-    eyebrow: '本机设置',
-    title: '配置 AI 接口',
-    description: '保存自己的 OpenAI 兼容接口，并管理托盘与更新行为。'
+    label: '隐私清洗',
+    eyebrow: '元数据安全',
+    title: '隐私清洗',
+    description: '重置 DOCX / PDF 中可泄露身份的隐藏元数据；原文件只读，输出经强制验证后才会发布。',
+    icon: IconShield
   },
   review: {
-    eyebrow: '对照审查',
-    title: '检查投标文件错误',
-    description: '对照招标文件提取的固定要求，结合本机规则和可选 AI 辅助发现问题。'
+    label: '对照审查',
+    eyebrow: '招标 / 投标一致性',
+    title: '对照审查',
+    description: '以招标文件为基准核查投标文件，本机确定性规则优先，AI 仅在你明确确认后辅助。',
+    icon: IconCompare
   },
   generation: {
-    eyebrow: '资格标预制作',
-    title: '复用招标文件模板',
-    description: '从用户确认的招标模板生成可编辑草稿，固定值有证据，图片用占位符。'
+    label: '资格标预制作',
+    eyebrow: '模板复用',
+    title: '资格标预制作',
+    description: '从招标文件中确认资格模板并预填草稿：固定值凭证据填充，图片证照以占位符代替。',
+    icon: IconDocSpark
+  },
+  settings: {
+    label: '设置',
+    eyebrow: '本机配置',
+    title: '设置',
+    description: '管理 AI 接口、输出方式、公司资料预填与桌面行为，全部配置仅保存在本机。',
+    icon: IconGear
   }
 }
 
+const NAV_ORDER: readonly Page[] = ['sanitizer', 'review', 'generation', 'settings']
+
 export function App(): React.JSX.Element {
   const [page, setPage] = useState<Page>('sanitizer')
-  const copy = PAGE_COPY[page]
+  const meta = PAGES[page]
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
+        <div className="sidebar-brand">
           <span className="brand-mark" aria-hidden="true">
-            B
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 2.6 19 5.2v5.6c0 4.6-3 7.8-7 10-4-2.2-7-5.4-7-10V5.2l7-2.6Z"
+                fill="#fff"
+              />
+              <path
+                d="m8.8 11.9 2.2 2.2 4.2-4.5"
+                stroke="#2f5cff"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </span>
-          <div>
-            <strong>Bid Sentry</strong>
-            <span>文档安全助手</span>
-          </div>
+          <span>
+            <span className="brand-name">Bid Sentry</span>
+            <span className="brand-sub">标书安全助手</span>
+          </span>
         </div>
 
-        <nav className="primary-nav" aria-label="主要功能">
-          <button
-            type="button"
-            className={page === 'review' ? 'active' : ''}
-            aria-current={page === 'review' ? 'page' : undefined}
-            onClick={() => setPage('review')}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ✓
-            </span>
-            <span>
-              <strong>对照审查</strong>
-              <small>招标 / 投标</small>
-            </span>
-          </button>
-          <button
-            type="button"
-            className={page === 'generation' ? 'active' : ''}
-            aria-current={page === 'generation' ? 'page' : undefined}
-            onClick={() => setPage('generation')}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ✦
-            </span>
-            <span>
-              <strong>资格标预制作</strong>
-              <small>模板复用</small>
-            </span>
-          </button>
-          <button
-            type="button"
-            className={page === 'sanitizer' ? 'active' : ''}
-            aria-current={page === 'sanitizer' ? 'page' : undefined}
-            onClick={() => setPage('sanitizer')}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ◇
-            </span>
-            <span>
-              <strong>隐私清洗</strong>
-              <small>DOCX / PDF</small>
-            </span>
-          </button>
-          <button
-            type="button"
-            className={page === 'settings' ? 'active' : ''}
-            aria-current={page === 'settings' ? 'page' : undefined}
-            onClick={() => setPage('settings')}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ⚙
-            </span>
-            <span>
-              <strong>AI 设置</strong>
-              <small>自备接口</small>
-            </span>
-          </button>
+        <nav className="sidebar-nav" aria-label="主要功能">
+          {NAV_ORDER.map((key) => {
+            const item = PAGES[key]
+            const Icon = item.icon
+            const active = page === key
+            return (
+              <button
+                key={key}
+                type="button"
+                className={`nav-item${active ? ' is-active' : ''}`}
+                aria-current={active ? 'page' : undefined}
+                onClick={() => setPage(key)}
+              >
+                <Icon size={18} />
+                {item.label}
+              </button>
+            )
+          })}
         </nav>
 
-        <div className="sidebar-trust">
-          <span className="status-dot" aria-hidden="true" />
-          <div>
-            <strong>单机运行</strong>
-            <span>原文件只读 · 验证后发布</span>
-          </div>
+        <div className="sidebar-foot">
+          <SidebarUpdateBadge />
+          <span className="sidebar-version">v{__BID_SENTRY_VERSION__} · 开源单机工具</span>
         </div>
-        <p className="sidebar-version">v{__BID_SENTRY_VERSION__} · 开源本地工具</p>
       </aside>
 
-      <main className="workspace">
-        <header className="page-header">
-          <div>
-            <p className="eyebrow">{copy.eyebrow}</p>
-            <h1>{copy.title}</h1>
-            <p>{copy.description}</p>
-          </div>
-          <span className="local-badge">
-            <span aria-hidden="true">●</span> 本机安全模式
-          </span>
-        </header>
+      <main className="content">
+        <div className="page">
+          <header className="page-head">
+            <p className="page-eyebrow">{meta.eyebrow}</p>
+            <h1 className="page-title">{meta.title}</h1>
+            <p className="page-desc">{meta.description}</p>
+          </header>
 
-        <div hidden={page !== 'sanitizer'}>
-          <SanitizerPage />
-        </div>
-        <div hidden={page !== 'settings'}>
-          <SettingsPage />
-        </div>
-        <div hidden={page !== 'review'}>
-          <ReviewPage />
-        </div>
-        <div hidden={page !== 'generation'}>
-          <GenerationPage />
+          <div hidden={page !== 'sanitizer'}>
+            <SanitizerPage active={page === 'sanitizer'} />
+          </div>
+          <div hidden={page !== 'review'}>
+            <ReviewPage />
+          </div>
+          <div hidden={page !== 'generation'}>
+            <GenerationPage />
+          </div>
+          <div hidden={page !== 'settings'}>
+            <SettingsPage />
+          </div>
         </div>
       </main>
     </div>

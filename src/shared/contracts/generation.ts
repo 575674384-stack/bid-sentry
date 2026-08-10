@@ -16,6 +16,20 @@ export const TemplateCandidateSchema = z
   })
   .strict()
 
+/** An extra form field proposed by the analysis step or added by the user. */
+export const GenerationExtraFieldSchema = z
+  .object({
+    key: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .regex(/^[a-z0-9][a-z0-9-]*$/u),
+    label: z.string().trim().min(1).max(100),
+    value: z.string().trim().max(500)
+  })
+  .strict()
+
 export const GenerationUserFormSchema = z
   .object({
     bidderName: z.string().trim().min(1).max(300),
@@ -28,7 +42,37 @@ export const GenerationUserFormSchema = z
     email: z.string().trim().max(200),
     projectName: z.string().trim().max(300),
     sectionName: z.string().trim().max(200),
-    compilationDate: z.string().trim().max(40)
+    compilationDate: z.string().trim().max(40),
+    extraFields: z.array(GenerationExtraFieldSchema).max(30).default([])
+  })
+  .strict()
+
+/** A field the analysis believes the template expects the bidder to fill. */
+export const SuggestedFieldSchema = z
+  .object({
+    key: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .regex(/^[a-z0-9][a-z0-9-]*$/u),
+    label: z.string().trim().min(1).max(100),
+    hint: z.string().trim().max(200).optional(),
+    required: z.boolean()
+  })
+  .strict()
+
+/**
+ * Analysis extraction. The AI (or local fallback) may only shape which
+ * questions the user is asked and summarize qualification requirements;
+ * deterministic code with tender evidence still owns every filled value.
+ */
+export const GenerationExtractionSchema = z
+  .object({
+    aiUsed: z.boolean(),
+    qualificationSummary: z.array(z.string().trim().min(1).max(300)).max(12),
+    suggestedFields: z.array(SuggestedFieldSchema).max(30),
+    notices: z.array(z.string().trim().max(300)).max(10)
   })
   .strict()
 
@@ -87,7 +131,7 @@ export const FillPlanSchema = z
   })
   .strict()
 
-export const GenerationPreviewPlanSchema = z
+export const GenerationPlanSchema = z
   .object({
     candidateId: z.string().regex(/^[a-f0-9]{16,64}$/u),
     planId: z.string().uuid(),
@@ -117,12 +161,27 @@ export const GenerationPreviewPlanSchema = z
   })
   .strict()
 
-export const GenerationRequestSchema = z
+export const GenerationAnalyzeRequestSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    inputId: z.string().uuid()
+  })
+  .strict()
+
+export const GenerationPlanRequestSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    analysisTaskId: z.string().uuid(),
+    candidateId: z.string().regex(/^[a-f0-9]{16,64}$/u),
+    userForm: GenerationUserFormSchema
+  })
+  .strict()
+
+export const GenerationRunRequestSchema = z
   .object({
     schemaVersion: z.literal(1),
     inputId: z.string().uuid(),
-    outputDirectoryId: z.string().uuid(),
-    previewTaskId: z.string().uuid(),
+    analysisTaskId: z.string().uuid(),
     candidateId: z.string().regex(/^[a-f0-9]{16,64}$/u),
     planId: z.string().uuid(),
     planDigest: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -130,22 +189,14 @@ export const GenerationRequestSchema = z
   })
   .strict()
 
-export const GenerationPreviewRequestSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    inputId: z.string().uuid(),
-    userForm: GenerationUserFormSchema
-  })
-  .strict()
-
-export const GenerationPreviewSchema = z
+export const GenerationAnalysisSchema = z
   .object({
     schemaVersion: z.literal(1),
     taskId: z.string().uuid(),
     inputName: z.string().trim().min(1).max(255),
     inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
     candidates: z.array(TemplateCandidateSchema).min(1).max(50),
-    plans: z.array(GenerationPreviewPlanSchema).min(1).max(50)
+    extraction: GenerationExtractionSchema
   })
   .strict()
 
@@ -172,11 +223,15 @@ export const GenerationResultSchema = z
   .strict()
 
 export type TemplateCandidate = z.infer<typeof TemplateCandidateSchema>
+export type GenerationExtraField = z.infer<typeof GenerationExtraFieldSchema>
 export type GenerationUserForm = z.infer<typeof GenerationUserFormSchema>
+export type SuggestedField = z.infer<typeof SuggestedFieldSchema>
+export type GenerationExtraction = z.infer<typeof GenerationExtractionSchema>
 export type FieldAction = z.infer<typeof FieldActionSchema>
 export type FillPlan = z.infer<typeof FillPlanSchema>
-export type GenerationPreviewPlan = z.infer<typeof GenerationPreviewPlanSchema>
-export type GenerationRequest = z.infer<typeof GenerationRequestSchema>
-export type GenerationPreviewRequest = z.infer<typeof GenerationPreviewRequestSchema>
-export type GenerationPreview = z.infer<typeof GenerationPreviewSchema>
+export type GenerationPlan = z.infer<typeof GenerationPlanSchema>
+export type GenerationAnalyzeRequest = z.infer<typeof GenerationAnalyzeRequestSchema>
+export type GenerationPlanRequest = z.infer<typeof GenerationPlanRequestSchema>
+export type GenerationRunRequest = z.infer<typeof GenerationRunRequestSchema>
+export type GenerationAnalysis = z.infer<typeof GenerationAnalysisSchema>
 export type GenerationResult = z.infer<typeof GenerationResultSchema>

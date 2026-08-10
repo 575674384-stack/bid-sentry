@@ -85,8 +85,10 @@ interface ElementSpec {
 const CORE_SPECS: readonly ElementSpec[] = [
   spec(DC_NS, 'creator', 'core:creator', 'person-identity', 'string', 'person'),
   spec(CORE_NS, 'lastModifiedBy', 'core:lastModifiedBy', 'person-identity', 'string', 'person'),
-  spec(DCTERMS_NS, 'created', 'core:created', 'timestamp', 'timestamp', 'timestamp'),
-  spec(DCTERMS_NS, 'modified', 'core:modified', 'timestamp', 'timestamp', 'timestamp'),
+  // Document timestamps are factual history, not identity: they are preserved
+  // byte-identical instead of randomized.
+  preserveSpec(DCTERMS_NS, 'created', 'core:created', 'timestamp', 'timestamp'),
+  preserveSpec(DCTERMS_NS, 'modified', 'core:modified', 'timestamp', 'timestamp'),
   spec(CORE_NS, 'revision', 'core:revision', 'document-identifier', 'integer', 'integer'),
   spec(DC_NS, 'identifier', 'core:identifier', 'document-identifier', 'uuid', 'uuid'),
   spec(DC_NS, 'title', 'core:title', 'description', 'string', 'description'),
@@ -95,7 +97,7 @@ const CORE_SPECS: readonly ElementSpec[] = [
   spec(CORE_NS, 'category', 'core:category', 'description', 'string', 'description'),
   spec(DC_NS, 'description', 'core:description', 'description', 'string', 'description'),
   spec(CORE_NS, 'contentStatus', 'core:contentStatus', 'description', 'string', 'description'),
-  spec(CORE_NS, 'lastPrinted', 'core:lastPrinted', 'timestamp', 'timestamp', 'timestamp')
+  preserveSpec(CORE_NS, 'lastPrinted', 'core:lastPrinted', 'timestamp', 'timestamp')
 ]
 
 const APP_SPECS: readonly ElementSpec[] = [
@@ -131,16 +133,8 @@ export function createDocxMetadataPlan(archive: DocxArchive): DocxMetadataPlanDa
   const mapping = new TaskRandomMapping()
   const replacementValues = new Map<string, string>()
   try {
-    const created = occurrences.find((occurrence) => occurrence.field === 'core:created')
-    const modified = occurrences.find((occurrence) => occurrence.field === 'core:modified')
-    if (created?.action === 'randomize' && modified?.action === 'randomize') {
-      const pair = mapping.timestampPair(created.originalValue, modified.originalValue)
-      replacementValues.set(occurrenceKey(created), pair.created)
-      replacementValues.set(occurrenceKey(modified), pair.modified)
-    }
     for (const occurrence of occurrences) {
       if (occurrence.action !== 'randomize' || !occurrence.replacementKind) continue
-      if (replacementValues.has(occurrenceKey(occurrence))) continue
       replacementValues.set(occurrenceKey(occurrence), randomizedValue(mapping, occurrence))
     }
     return {
@@ -164,7 +158,6 @@ export function sanitizeDocxMetadata(
   const replacements = new Map<string, Buffer>()
   const changedParts = new Set<string>()
   const allOccurrences = parsedParts.flatMap((part) => part.occurrences)
-  const handled = new Set<string>()
 
   if (replacementValues) {
     for (const occurrence of allOccurrences) {
@@ -172,22 +165,10 @@ export function sanitizeDocxMetadata(
       const value = replacementValues[occurrenceKey(occurrence)]
       if (value === undefined) throw new DocumentSafetyError('PLAN_EXPIRED')
       occurrence.setValue(value)
-      handled.add(occurrenceKey(occurrence))
     }
   } else {
-    const created = allOccurrences.find((occurrence) => occurrence.field === 'core:created')
-    const modified = allOccurrences.find((occurrence) => occurrence.field === 'core:modified')
-    if (created?.action === 'randomize' && modified?.action === 'randomize') {
-      const pair = mapping.timestampPair(created.originalValue, modified.originalValue)
-      created.setValue(pair.created)
-      modified.setValue(pair.modified)
-      handled.add(occurrenceKey(created))
-      handled.add(occurrenceKey(modified))
-    }
-
     for (const occurrence of allOccurrences) {
       if (occurrence.action !== 'randomize' || !occurrence.replacementKind) continue
-      if (handled.has(occurrenceKey(occurrence))) continue
       occurrence.setValue(randomizedValue(mapping, occurrence))
     }
   }
@@ -560,13 +541,19 @@ function spec(
   return { namespace, localName, field, category, valueType, action: 'randomize', replacementKind }
 }
 
-function preserveSpec(namespace: string, localName: string, field: string): ElementSpec {
+function preserveSpec(
+  namespace: string,
+  localName: string,
+  field: string,
+  category: MetadataFieldCategory = 'other',
+  valueType: MetadataValueType = 'integer'
+): ElementSpec {
   return {
     namespace,
     localName,
     field,
-    category: 'other',
-    valueType: 'integer',
+    category,
+    valueType,
     action: 'preserve',
     replacementKind: null
   }

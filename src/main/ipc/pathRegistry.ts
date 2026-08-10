@@ -1,15 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { lstat } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import {
   SanitizationTaskResultSchema,
   SelectedInputFilesSchema,
-  SelectedOutputDirectorySchema,
   type InputSnapshot,
-  type FileSystemIdentity,
   type SanitizationTaskResult,
   type SelectedInputFiles,
-  type SelectedOutputDirectory,
   type WorkerExecutionResult,
   ReviewResultSchema,
   GenerationResultSchema,
@@ -17,17 +13,10 @@ import {
   type GenerationResult
 } from '../../shared/contracts'
 import { DocumentSafetyError } from '../../core/documents/fileSafety'
-import { resolvePathIdentityWithoutSymbolicLinks } from '../../core/documents/pathSafety'
 
 interface OwnedInput {
   ownerId: number
   snapshot: InputSnapshot
-}
-
-interface OwnedOutputDirectory {
-  ownerId: number
-  absolutePath: string
-  identity: FileSystemIdentity
 }
 
 interface OwnedResultFile {
@@ -37,7 +26,6 @@ interface OwnedResultFile {
 
 export class PathRegistry {
   readonly #inputs = new Map<string, OwnedInput>()
-  readonly #outputDirectories = new Map<string, OwnedOutputDirectory>()
   readonly #resultFiles = new Map<string, OwnedResultFile>()
 
   registerInputs(ownerId: number, snapshots: readonly InputSnapshot[]): SelectedInputFiles {
@@ -67,64 +55,39 @@ export class PathRegistry {
     }))
   }
 
-  async registerOutputDirectory(
-    ownerId: number,
-    directoryPath: string
-  ): Promise<SelectedOutputDirectory> {
-    const resolvedDirectory = await resolvePathIdentityWithoutSymbolicLinks(directoryPath).catch(
-      (error: unknown) => {
-        throw new DocumentSafetyError('INVALID_DOCUMENT', error)
-      }
-    )
-    const absolutePath = resolvedDirectory.canonicalPath
-    const info = await lstat(absolutePath).catch((error: unknown) => {
-      throw new DocumentSafetyError('INVALID_DOCUMENT', error)
-    })
-    if (!info.isDirectory() || info.isSymbolicLink()) {
-      throw new DocumentSafetyError('INVALID_DOCUMENT')
-    }
-
-    const outputDirectoryId = randomUUID()
-    this.#outputDirectories.set(outputDirectoryId, {
-      ownerId,
-      absolutePath,
-      identity: resolvedDirectory.identity
-    })
-    return SelectedOutputDirectorySchema.parse({
-      schemaVersion: 1,
-      outputDirectoryId,
-      displayName: basename(absolutePath)
-    })
-  }
-
-  resolveOutputDirectory(
-    ownerId: number,
-    outputDirectoryId: string
-  ): { absolutePath: string; identity: FileSystemIdentity } {
-    const entry = this.#owned(this.#outputDirectories, outputDirectoryId, ownerId)
-    return { absolutePath: entry.absolutePath, identity: entry.identity }
-  }
-
+  /**
+   * Registers sanitizer outputs for "show in folder". Every document output
+   * must live in its own input's directory (per-input order), and the two
+   * reports in the first input's directory — this is what keeps an absolute
+   * path capability from ever pointing somewhere the user did not pick.
+   */
   registerTaskResult(
     ownerId: number,
-    outputDirectory: string,
+    inputDirectories: readonly string[],
     result: WorkerExecutionResult
   ): SanitizationTaskResult {
-    const expectedDirectory = resolve(outputDirectory)
+    const expectedDirectories = inputDirectories.map((directory) => resolve(directory))
+    const reportDirectory = expectedDirectories[0]
+    if (!reportDirectory || expectedDirectories.length !== result.outputPaths.length) {
+      throw new DocumentSafetyError('INTERNAL_ERROR')
+    }
     const paths = [
       ...result.outputPaths.map((absolutePath, index) => ({
         absolutePath,
         displayName: result.report.files[index]?.outputDisplayName ?? '',
+        expectedDirectory: expectedDirectories[index] as string,
         kind: 'sanitized-document' as const
       })),
       {
         absolutePath: result.jsonReportPath,
         displayName: basename(result.jsonReportPath),
+        expectedDirectory: reportDirectory,
         kind: 'json-report' as const
       },
       {
         absolutePath: result.htmlReportPath,
         displayName: basename(result.htmlReportPath),
+        expectedDirectory: reportDirectory,
         kind: 'html-report' as const
       }
     ]
@@ -133,7 +96,7 @@ export class PathRegistry {
       paths.some(
         (file) =>
           !file.displayName ||
-          dirname(resolve(file.absolutePath)) !== expectedDirectory ||
+          dirname(resolve(file.absolutePath)) !== file.expectedDirectory ||
           basename(file.absolutePath) !== file.displayName
       )
     ) {
@@ -185,7 +148,6 @@ export class PathRegistry {
 
   revokeOwner(ownerId: number): void {
     revokeOwned(this.#inputs, ownerId)
-    revokeOwned(this.#outputDirectories, ownerId)
     revokeOwned(this.#resultFiles, ownerId)
   }
 

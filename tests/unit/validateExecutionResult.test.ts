@@ -36,8 +36,6 @@ describe('Main execution artifact validation', () => {
     const root = await mkdtemp(join(tmpdir(), 'bid-sentry-real-result-validation-'))
     temporaryDirectories.push(root)
     const inputPath = join(root, 'input.docx')
-    const outputDirectory = join(root, 'output')
-    await mkdir(outputDirectory)
     await writeDocxFixture(inputPath)
     const taskId = randomUUID()
     const inputId = randomUUID()
@@ -51,15 +49,15 @@ describe('Main execution artifact validation', () => {
       },
       new AbortController().signal
     )
-    const workspace = await createTemporaryWorkspace(outputDirectory)
+    const workspace = await createTemporaryWorkspace(root)
     const result = await job.execute(
       {
         taskId,
         planDigest: preview.planDigest,
-        outputDirectory: workspace.outputDirectory,
+        outputMode: 'suffix',
+        outputSuffix: '_已清洗',
         workspaceRootPath: workspace.rootPath,
         workspaceRootIdentity: workspace.rootIdentity,
-        outputDirectoryIdentity: workspace.outputDirectoryIdentity,
         appVersion: '0.1.0'
       },
       new AbortController().signal
@@ -71,7 +69,7 @@ describe('Main execution artifact validation', () => {
     await expect(
       validateExecutionResultArtifacts({
         result,
-        outputDirectory: workspace.outputDirectory,
+        outputDirectories: [root],
         workspaceRootPath: workspace.rootPath,
         logicalResultValid: true
       })
@@ -86,7 +84,7 @@ describe('Main execution artifact validation', () => {
 
     const published = await validateExecutionResultArtifacts({
       result: fixture.result,
-      outputDirectory: fixture.outputDirectory,
+      outputDirectories: [fixture.outputDirectory],
       workspaceRootPath: fixture.workspaceRootPath,
       logicalResultValid: true
     })
@@ -134,7 +132,7 @@ describe('Main execution artifact validation', () => {
     await expect(
       validateExecutionResultArtifacts({
         result: malformed,
-        outputDirectory: fixture.outputDirectory,
+        outputDirectories: [fixture.outputDirectory],
         workspaceRootPath: fixture.workspaceRootPath,
         logicalResultValid: false
       })
@@ -184,7 +182,7 @@ async function createFixture(): Promise<{
 function validateFixture(fixture: Awaited<ReturnType<typeof createFixture>>): Promise<unknown> {
   return validateExecutionResultArtifacts({
     result: fixture.result,
-    outputDirectory: fixture.outputDirectory,
+    outputDirectories: [fixture.outputDirectory],
     workspaceRootPath: fixture.workspaceRootPath,
     logicalResultValid: true
   })

@@ -168,7 +168,7 @@ describe('DOCX metadata sanitizer', () => {
     const plan = await docxDocumentAdapter.createPlan(input, inspection, signal)
     const workspace = await createTemporaryWorkspace(directory)
     const temporaryPath = await reserveTemporaryFile(workspace, 'bid_sanitized.docx')
-    const outputPath = buildSanitizedOutputPath(inputPath, directory)
+    const outputPath = buildSanitizedOutputPath(inputPath, 'suffix', '_已清洗')
 
     await docxDocumentAdapter.sanitizeToTemp(input, plan, temporaryPath, signal)
     const sanitizedArchive = await readDocxArchive(temporaryPath)

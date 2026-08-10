@@ -1,9 +1,15 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { readFile, writeFile } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { createHash } from 'node:crypto'
+import { lstat, readFile, writeFile } from 'node:fs/promises'
+import { basename, join, parse as parsePath } from 'node:path'
 import { readDocumentSnapshot } from '../../core/documents/documentReader'
 import { findTemplateCandidates } from '../../core/generation/templateCandidates'
-import { createFillPlan } from '../../core/generation/fieldPlan'
+import { createFillPlan, isKnownTemplateLabel } from '../../core/generation/fieldPlan'
+import { buildLocalGenerationExtraction } from '../../core/generation/extraction'
+import {
+  buildGenerationExtractionMessages,
+  parseGenerationExtraction,
+  type GenerationAiExtraction
+} from '../../core/ai/prompts/generation'
 import {
   generateDocxFromTemplate,
   generateMinimalDocxFromPdf,
@@ -14,16 +20,22 @@ import {
 import { inspectDocxArchive } from '../../core/documents/docx/inspect'
 import { readDocxArchive } from '../../core/documents/docx/archive'
 import {
-  GenerationPreviewSchema,
+  GenerationAnalysisSchema,
+  GenerationPlanSchema,
   GenerationResultSchema,
-  type FileSystemIdentity,
+  GenerationExtractionSchema,
+  type AiSettings,
   type DocumentSnapshot,
   type FieldAction,
-  type GenerationPreview,
-  type GenerationPreviewPlan,
-  type GenerationPreviewRequest,
-  type GenerationRequest,
+  type FileSystemIdentity,
+  type FillPlan,
+  type GenerationAnalysis,
+  type GenerationAnalyzeRequest,
+  type GenerationExtraction,
+  type GenerationPlan,
+  type GenerationPlanRequest,
   type GenerationResult,
+  type GenerationRunRequest,
   type InputSnapshot,
   type TemplateCandidate,
   type TemporaryWorkspaceDescriptor,
@@ -34,20 +46,27 @@ import {
   DocumentSafetyError,
   withDiagnosticDocumentError
 } from '../../core/documents/fileSafety'
+import { requestChatCompletion } from '../ai/chatCompletionsClient'
+import type { SettingsService } from '../settings/settingsService'
 import { copyInputToWorkspace, publishVerifiedArtifacts } from './verifiedPublication'
 
-const DEFAULT_PREVIEW_TTL_MS = 30 * 60 * 1000
+const DEFAULT_ANALYSIS_TTL_MS = 30 * 60 * 1000
 const MAX_ACTIVE_GENERATION_TASKS = 4
 const GENERATION_TASK_TIMEOUT_MS = 30 * 60 * 1000
+const MAX_OUTPUT_NAME_ATTEMPTS = 100
 
-interface StoredGenerationPreview {
+const NO_AI_KEY_NOTICE = '未配置 AI 接口，已使用本地规则分析。'
+const AI_FALLBACK_NOTICE = 'AI 分析失败，已使用本地规则分析。'
+
+interface StoredGenerationAnalysis {
   taskId: string
   inputId: string
   inputSha256: string
   inputDocumentType: InputSnapshot['documentType']
   document: DocumentSnapshot
   candidates: TemplateCandidate[]
-  plans: Map<string, ReturnType<typeof createFillPlan>>
+  extraction: GenerationExtraction
+  plans: Map<string, FillPlan>
   expiresAtMs: number
   executing: boolean
 }
@@ -62,17 +81,19 @@ interface GenerationWriteValue {
 
 export interface GenerationTaskManagerOptions {
   now?: () => Date
-  previewTtlMs?: number
+  analysisTtlMs?: number
+  settingsService?: SettingsService
   recordWorkspace?: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
   forgetWorkspace?: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
 }
 
 export class GenerationTaskManager {
-  readonly #previews = new Map<string, StoredGenerationPreview>()
+  readonly #analyses = new Map<string, StoredGenerationAnalysis>()
   readonly #controllers = new Map<string, AbortController>()
   readonly #activeRuns = new Map<string, Promise<void>>()
   readonly #now: () => Date
-  readonly #previewTtlMs: number
+  readonly #analysisTtlMs: number
+  readonly #settingsService: SettingsService | undefined
   readonly #recordWorkspace: GenerationTaskManagerOptions['recordWorkspace']
   readonly #forgetWorkspace: GenerationTaskManagerOptions['forgetWorkspace']
   readonly #expiryTimer: NodeJS.Timeout
@@ -80,24 +101,25 @@ export class GenerationTaskManager {
 
   constructor(options: GenerationTaskManagerOptions = {}) {
     this.#now = options.now ?? (() => new Date())
-    this.#previewTtlMs = options.previewTtlMs ?? DEFAULT_PREVIEW_TTL_MS
+    this.#analysisTtlMs = options.analysisTtlMs ?? DEFAULT_ANALYSIS_TTL_MS
+    this.#settingsService = options.settingsService
     this.#recordWorkspace = options.recordWorkspace
     this.#forgetWorkspace = options.forgetWorkspace
-    this.#expiryTimer = setInterval(() => this.#evictExpiredPreviews(), 60_000)
+    this.#expiryTimer = setInterval(() => this.#evictExpiredAnalyses(), 60_000)
     this.#expiryTimer.unref?.()
   }
 
-  async preview(
-    request: GenerationPreviewRequest,
+  async analyze(
+    request: GenerationAnalyzeRequest,
     input: InputSnapshot,
-    taskId = randomUUID()
-  ): Promise<GenerationPreview> {
+    taskId: string
+  ): Promise<GenerationAnalysis> {
     if (this.#shuttingDown) throw new DocumentSafetyError('TASK_CANCELLED')
     if (this.#controllers.size >= MAX_ACTIVE_GENERATION_TASKS) {
       throw new DocumentSafetyError('INVALID_REQUEST')
     }
-    this.#evictExpiredPreviews()
-    if (this.#controllers.has(taskId) || this.#previews.has(taskId)) {
+    this.#evictExpiredAnalyses()
+    if (this.#controllers.has(taskId) || this.#analyses.has(taskId)) {
       throw new DocumentSafetyError('INVALID_REQUEST')
     }
     const controller = new AbortController()
@@ -124,38 +146,31 @@ export class GenerationTaskManager {
         throw new DocumentSafetyError('TASK_CANCELLED')
       const candidates = findTemplateCandidates(document)
       if (candidates.length === 0) throw new DocumentSafetyError('INVALID_REQUEST')
-      const plans = new Map(
-        candidates.map((candidate) => [
-          candidate.candidateId,
-          createFillPlan(document, candidate, request.userForm, input.sha256)
-        ])
-      )
-      const previewPlans = candidates.map((candidate) =>
-        toPreviewPlan(plans.get(candidate.candidateId)!)
-      )
-      const preview = GenerationPreviewSchema.parse({
+      const extraction = await this.#extract(document, candidates, controller.signal)
+      if (controller.signal.aborted || this.#shuttingDown) {
+        throw new DocumentSafetyError('TASK_CANCELLED')
+      }
+      const analysis = GenerationAnalysisSchema.parse({
         schemaVersion: 1,
         taskId,
         inputName: input.displayName,
         inputSha256: input.sha256,
         candidates,
-        plans: previewPlans
+        extraction
       })
-      if (controller.signal.aborted || this.#shuttingDown) {
-        throw new DocumentSafetyError('TASK_CANCELLED')
-      }
-      this.#previews.set(taskId, {
+      this.#analyses.set(taskId, {
         taskId,
         inputId: request.inputId,
         inputSha256: input.sha256,
         inputDocumentType: input.documentType,
         document,
         candidates,
-        plans,
-        expiresAtMs: this.#now().getTime() + this.#previewTtlMs,
+        extraction,
+        plans: new Map(),
+        expiresAtMs: this.#now().getTime() + this.#analysisTtlMs,
         executing: false
       })
-      return preview
+      return analysis
     } catch (error) {
       if (timedOut)
         throw withDiagnosticDocumentError(new DocumentSafetyError('TASK_TIMEOUT'), 'document-parse')
@@ -164,19 +179,48 @@ export class GenerationTaskManager {
       clearTimeout(taskTimeout)
       this.#activeRuns.delete(taskId)
       resolveActive()
-      if (!this.#previews.has(taskId)) this.#controllers.delete(taskId)
+      if (!this.#analyses.has(taskId)) this.#controllers.delete(taskId)
     }
   }
 
+  async plan(request: GenerationPlanRequest): Promise<GenerationPlan> {
+    if (this.#shuttingDown) throw new DocumentSafetyError('TASK_CANCELLED')
+    this.#evictExpiredAnalyses()
+    const stored = this.#analyses.get(request.analysisTaskId)
+    if (!stored || stored.executing || this.#now().getTime() > stored.expiresAtMs) {
+      throw new DocumentSafetyError('PLAN_EXPIRED')
+    }
+    const candidate = stored.candidates.find((item) => item.candidateId === request.candidateId)
+    if (!candidate) throw new DocumentSafetyError('INVALID_REQUEST')
+    const plan = createFillPlan(stored.document, candidate, request.userForm, stored.inputSha256)
+    // A re-plan supersedes earlier plans for the same candidate: only the
+    // newest confirmed form may ever reach execution.
+    for (const [planId, existing] of stored.plans) {
+      if (existing.candidateId === candidate.candidateId) stored.plans.delete(planId)
+    }
+    stored.plans.set(plan.planId, plan)
+    return GenerationPlanSchema.parse({
+      candidateId: plan.candidateId,
+      planId: plan.planId,
+      planDigest: plan.planDigest,
+      inputSha256: plan.inputSha256,
+      actions: plan.actions,
+      unknownRequired: plan.unknownRequired,
+      unknownFields: plan.unknownFields,
+      unresolvedFields: plan.unresolvedFields,
+      warnings: plan.warnings
+    })
+  }
+
   async run(
-    request: GenerationRequest,
+    request: GenerationRunRequest,
     input: InputSnapshot,
     outputDirectory: string,
     outputDirectoryIdentity: FileSystemIdentity
   ): Promise<GenerationResult> {
     if (this.#shuttingDown) throw new DocumentSafetyError('TASK_CANCELLED')
-    this.#evictExpiredPreviews()
-    const stored = this.#previews.get(request.previewTaskId)
+    this.#evictExpiredAnalyses()
+    const stored = this.#analyses.get(request.analysisTaskId)
     if (!stored || stored.executing) throw new DocumentSafetyError('PLAN_EXPIRED')
     if (
       this.#now().getTime() > stored.expiresAtMs ||
@@ -184,15 +228,15 @@ export class GenerationTaskManager {
       stored.inputSha256 !== input.sha256 ||
       stored.inputDocumentType !== input.documentType
     ) {
-      this.#previews.delete(request.previewTaskId)
+      this.#analyses.delete(request.analysisTaskId)
       throw new DocumentSafetyError('PLAN_EXPIRED')
     }
     const candidate = stored.candidates.find((item) => item.candidateId === request.candidateId)
-    const plan = stored.plans.get(request.candidateId)
+    const plan = stored.plans.get(request.planId)
     if (
       !candidate ||
       !plan ||
-      plan.planId !== request.planId ||
+      plan.candidateId !== request.candidateId ||
       plan.planDigest !== request.planDigest
     ) {
       throw new DocumentSafetyError('PLAN_EXPIRED')
@@ -212,13 +256,20 @@ export class GenerationTaskManager {
       resolveActiveRun = resolve
     })
     this.#activeRuns.set(taskId, activeRun)
-    const outputName = `${input.displayName.replace(/\.(?:docx|pdf)$/iu, '')}_资格标草稿.docx`
-    const reportName = `qualification-generation-${taskId}.json`
+    const inputBaseName = input.displayName.replace(/\.(?:docx|pdf)$/iu, '')
     // Verification must use the exact immutable copy consumed by the writer,
     // never by reopening the user-controlled path after generation.
     let frozenInputPath: string | null = null
     try {
       await assertInputUnchanged(input, controller.signal)
+      const outputName = await resolveAvailableOutputName(
+        outputDirectory,
+        `${inputBaseName}_资格标草稿.docx`
+      )
+      const reportName = await resolveAvailableOutputName(
+        outputDirectory,
+        `qualification-generation-${taskId}.json`
+      )
       const publication = await publishVerifiedArtifacts<GenerationWriteValue>({
         outputDirectory,
         outputDirectoryIdentity,
@@ -295,21 +346,21 @@ export class GenerationTaskManager {
     } finally {
       clearTimeout(taskTimeout)
       this.#controllers.delete(taskId)
-      this.#previews.delete(request.previewTaskId)
+      this.#analyses.delete(request.analysisTaskId)
       this.#activeRuns.delete(taskId)
       resolveActiveRun()
     }
   }
 
-  hasPreview(taskId: string): boolean {
-    this.#evictExpiredPreviews()
-    return this.#previews.has(taskId)
+  hasTask(taskId: string): boolean {
+    this.#evictExpiredAnalyses()
+    return this.#analyses.has(taskId) || this.#controllers.has(taskId)
   }
 
   cancel(taskId: string): void {
-    this.#evictExpiredPreviews()
+    this.#evictExpiredAnalyses()
     this.#controllers.get(taskId)?.abort()
-    this.#previews.delete(taskId)
+    this.#analyses.delete(taskId)
     if (!this.#activeRuns.has(taskId)) this.#controllers.delete(taskId)
   }
 
@@ -318,34 +369,136 @@ export class GenerationTaskManager {
     for (const controller of this.#controllers.values()) controller.abort()
     await Promise.allSettled([...this.#activeRuns.values()])
     this.#controllers.clear()
-    this.#previews.clear()
+    this.#analyses.clear()
     clearInterval(this.#expiryTimer)
     this.#activeRuns.clear()
   }
 
-  #evictExpiredPreviews(): void {
+  async #extract(
+    document: DocumentSnapshot,
+    candidates: readonly TemplateCandidate[],
+    signal: AbortSignal
+  ): Promise<GenerationExtraction> {
+    const settings = this.#settingsService ? await this.#settingsService.getPublicSettings() : null
+    const apiKey = this.#settingsService ? await this.#settingsService.getApiKeyForUse() : null
+    if (settings && apiKey) {
+      const ai = await this.#requestAiExtraction(document, candidates, settings, apiKey, signal)
+      if (ai) {
+        return GenerationExtractionSchema.parse({
+          aiUsed: true,
+          qualificationSummary: ai.qualificationSummary,
+          suggestedFields: ai.suggestedFields.filter((field) => !isKnownTemplateLabel(field.label)),
+          notices: []
+        })
+      }
+      if (signal.aborted) throw new DocumentSafetyError('TASK_CANCELLED')
+      // The AI step is an enhancement, never a hard dependency: fall back to
+      // the deterministic local extraction and tell the user what happened.
+      const local = buildLocalGenerationExtraction(document, candidates)
+      return GenerationExtractionSchema.parse({
+        aiUsed: false,
+        ...local,
+        notices: [AI_FALLBACK_NOTICE]
+      })
+    }
+    const local = buildLocalGenerationExtraction(document, candidates)
+    return GenerationExtractionSchema.parse({
+      aiUsed: false,
+      ...local,
+      notices: [NO_AI_KEY_NOTICE]
+    })
+  }
+
+  async #requestAiExtraction(
+    document: DocumentSnapshot,
+    candidates: readonly TemplateCandidate[],
+    settings: AiSettings,
+    apiKey: string,
+    signal: AbortSignal
+  ): Promise<GenerationAiExtraction | null> {
+    const sections = candidates.map((candidate) => ({
+      candidateId: candidate.candidateId,
+      title: candidate.title,
+      text: selectedDocumentNodes(document, candidate)
+        .map((node) => node.text)
+        .filter((text) => text.trim().length > 0)
+        .join('\n')
+    }))
+    const [system, user] = buildGenerationExtractionMessages(sections)
+    if (!system || !user) throw new DocumentSafetyError('INTERNAL_ERROR')
+    let content: string
+    try {
+      content = await requestChatCompletion({
+        baseUrl: settings.baseUrl,
+        apiKey,
+        model: settings.model,
+        timeoutMs: settings.timeoutMs,
+        signal,
+        messages: [system, user]
+      })
+    } catch (error) {
+      if (signal.aborted) throw new DocumentSafetyError('TASK_CANCELLED', error)
+      return null
+    }
+    const parsed = parseGenerationExtraction(content)
+    if (parsed) return parsed
+    try {
+      const corrected = await requestChatCompletion({
+        baseUrl: settings.baseUrl,
+        apiKey,
+        model: settings.model,
+        timeoutMs: settings.timeoutMs,
+        signal,
+        messages: [
+          system,
+          {
+            role: 'user',
+            content: `${user.content}\n上一次输出无法通过 JSON Schema 校验。只返回一个修正后的 JSON 对象，不要解释。`
+          }
+        ]
+      })
+      return parseGenerationExtraction(corrected)
+    } catch (error) {
+      if (signal.aborted) throw new DocumentSafetyError('TASK_CANCELLED', error)
+      return null
+    }
+  }
+
+  #evictExpiredAnalyses(): void {
     const now = this.#now().getTime()
-    for (const [taskId, preview] of this.#previews) {
-      if (preview.expiresAtMs <= now && !preview.executing) {
-        this.#previews.delete(taskId)
+    for (const [taskId, analysis] of this.#analyses) {
+      if (analysis.expiresAtMs <= now && !analysis.executing) {
+        this.#analyses.delete(taskId)
         this.#controllers.delete(taskId)
       }
     }
   }
 }
 
-function toPreviewPlan(plan: ReturnType<typeof createFillPlan>): GenerationPreviewPlan {
-  return {
-    candidateId: plan.candidateId,
-    planId: plan.planId,
-    planDigest: plan.planDigest,
-    inputSha256: plan.inputSha256,
-    actions: plan.actions,
-    unknownRequired: plan.unknownRequired,
-    unknownFields: plan.unknownFields,
-    unresolvedFields: plan.unresolvedFields,
-    warnings: plan.warnings
+/**
+ * Pick a collision-free output name inside the input's own directory, adding
+ * ` (2)`, ` (3)`, … when a previous draft already exists. Publication still
+ * re-checks availability atomically; this only chooses the candidate name.
+ */
+async function resolveAvailableOutputName(
+  outputDirectory: string,
+  fileName: string
+): Promise<string> {
+  const parts = parsePath(fileName)
+  for (let attempt = 1; attempt <= MAX_OUTPUT_NAME_ATTEMPTS; attempt += 1) {
+    const candidate = attempt === 1 ? fileName : `${parts.name} (${attempt})${parts.ext}`
+    try {
+      await lstat(join(outputDirectory, candidate))
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'ENOENT') return candidate
+      throw error
+    }
   }
+  throw new DocumentSafetyError('OUTPUT_EXISTS')
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error
 }
 
 async function verifyGeneratedDocx(

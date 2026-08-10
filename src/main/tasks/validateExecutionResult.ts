@@ -38,7 +38,7 @@ interface ArtifactValidation {
 
 export async function validateExecutionResultArtifacts(options: {
   result: WorkerExecutionResult
-  outputDirectory: string
+  outputDirectories: string[]
   workspaceRootPath: string
   logicalResultValid: boolean
 }): Promise<PublishedFile[]> {
@@ -95,21 +95,22 @@ export async function validateExecutionResultArtifacts(options: {
   )
 }
 
-function expectedArtifacts(options: { result: WorkerExecutionResult; outputDirectory: string }): {
-  artifacts: ExpectedArtifact[]
-  declaredPathsMatch: boolean
-} {
-  const expectedDirectory = resolve(options.outputDirectory)
+function expectedArtifacts(options: {
+  result: WorkerExecutionResult
+  outputDirectories: string[]
+}): { artifacts: ExpectedArtifact[]; declaredPathsMatch: boolean } {
+  const reportDirectory = resolve(options.outputDirectories[0] ?? '')
+  const expectedDirectories = options.outputDirectories.map((directory) => resolve(directory))
   const safeDisplayNames = options.result.report.files.every(
     (file) =>
       basename(file.outputDisplayName) === file.outputDisplayName &&
       file.outputDisplayName !== '.' &&
       file.outputDisplayName !== '..'
   )
-  const canonicalDocumentPaths = options.result.report.files.map((file) =>
-    join(expectedDirectory, basename(file.outputDisplayName))
+  const canonicalDocumentPaths = options.result.report.files.map((file, index) =>
+    join(expectedDirectories[index] as string, basename(file.outputDisplayName))
   )
-  const canonicalReportPaths = buildReportPaths(options.result.taskId, expectedDirectory)
+  const canonicalReportPaths = buildReportPaths(options.result.taskId, reportDirectory)
   const canonicalPaths = [
     ...canonicalDocumentPaths,
     canonicalReportPaths.json,
@@ -120,16 +121,29 @@ function expectedArtifacts(options: { result: WorkerExecutionResult; outputDirec
     options.result.jsonReportPath,
     options.result.htmlReportPath
   ]
-  const declaredPathsMatch =
+  const declaredDocumentPathsMatch =
     safeDisplayNames &&
-    canonicalPaths.length === declaredPaths.length &&
-    canonicalPaths.every(
+    canonicalDocumentPaths.length === options.result.outputPaths.length &&
+    canonicalDocumentPaths.every(
       (canonicalPath, index) =>
         normalizeFileIdentity(canonicalPath) ===
-          normalizeFileIdentity(declaredPaths[index] as string) &&
+          normalizeFileIdentity(options.result.outputPaths[index] as string) &&
         normalizeFileIdentity(dirname(resolve(canonicalPath))) ===
-          normalizeFileIdentity(expectedDirectory)
+          normalizeFileIdentity(expectedDirectories[index] as string)
     )
+  const declaredReportPathsMatch =
+    normalizeFileIdentity(canonicalReportPaths.json) ===
+      normalizeFileIdentity(options.result.jsonReportPath) &&
+    normalizeFileIdentity(dirname(resolve(canonicalReportPaths.json))) ===
+      normalizeFileIdentity(reportDirectory) &&
+    normalizeFileIdentity(canonicalReportPaths.html) ===
+      normalizeFileIdentity(options.result.htmlReportPath) &&
+    normalizeFileIdentity(dirname(resolve(canonicalReportPaths.html))) ===
+      normalizeFileIdentity(reportDirectory)
+  const declaredPathsMatch =
+    declaredDocumentPathsMatch &&
+    declaredReportPathsMatch &&
+    canonicalPaths.length === declaredPaths.length
 
   const documentArtifacts = canonicalDocumentPaths.map((finalPath, index) => {
     const output = options.result.report.files[index]?.output

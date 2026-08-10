@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
-import { basename } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import type {
   DocumentType,
   FileSystemIdentity,
   InputSnapshot,
+  OutputMode,
   SanitizationPreview,
   TaskProgress,
   VerificationReport,
@@ -30,11 +31,13 @@ import {
   cleanupTemporaryWorkspace,
   createTemporaryWorkspace,
   finalizeVerifiedOutput,
+  findAvailableSanitizedOutputPath,
   normalizeFileIdentity,
   rollbackPublishedFiles,
   type PublishedFile,
   reserveTemporaryFile
 } from '../documents/fileSafety'
+import { resolvePathIdentityWithoutSymbolicLinks } from '../documents/pathSafety'
 import { pdfDocumentAdapter } from '../documents/pdf'
 import {
   assertPublicSanitizationResultFits,
@@ -171,10 +174,10 @@ export class SanitizationJob {
     request: {
       taskId: string
       planDigest: string
-      outputDirectory: string
+      outputMode: OutputMode
+      outputSuffix: string
       workspaceRootPath?: string
       workspaceRootIdentity?: FileSystemIdentity
-      outputDirectoryIdentity?: FileSystemIdentity
       appVersion: string
     },
     signal: AbortSignal,
@@ -201,34 +204,53 @@ export class SanitizationJob {
     const startedAt = this.#now().toISOString()
     const publishedFiles: PublishedFile[] = []
     const hasCallerWorkspace = Boolean(request.workspaceRootPath)
-    if (
-      hasCallerWorkspace !== Boolean(request.workspaceRootIdentity) ||
-      hasCallerWorkspace !== Boolean(request.outputDirectoryIdentity)
-    ) {
+    if (hasCallerWorkspace !== Boolean(request.workspaceRootIdentity)) {
       throw new DocumentSafetyError('INTERNAL_ERROR')
     }
     const workspace = request.workspaceRootPath
       ? await adoptTemporaryWorkspace({
           rootPath: request.workspaceRootPath,
-          outputDirectory: request.outputDirectory,
+          // The caller always creates the temporary root inside the first
+          // input's own directory, so the output directory is structurally
+          // bound to dirname(rootPath) and re-attested against the filesystem.
+          outputDirectory: dirname(resolve(request.workspaceRootPath)),
           rootIdentity: request.workspaceRootIdentity as FileSystemIdentity,
-          outputDirectoryIdentity: request.outputDirectoryIdentity as FileSystemIdentity
+          outputDirectoryIdentity: (
+            await resolvePathIdentityWithoutSymbolicLinks(
+              dirname(resolve(request.workspaceRootPath))
+            )
+          ).identity
         })
-      : await createTemporaryWorkspace(request.outputDirectory)
+      : await createTemporaryWorkspace(
+          dirname(resolve(stored.plannedFiles[0]?.snapshot.absolutePath ?? ''))
+        )
     const cleanupOwnedByCaller = Boolean(request.workspaceRootPath)
     const outputDirectory = workspace.outputDirectory
     let workspaceCleaned = false
 
     try {
       assertNotAborted(signal)
-      const outputPaths = stored.plannedFiles.map((file) =>
-        buildSanitizedOutputPath(file.snapshot.absolutePath, outputDirectory)
-      )
+      // Every sanitized document is published next to its own input file.
+      // Suffix mode picks a collision-free name; overwrite mode reuses the
+      // input path itself and only replaces it after verification passed.
+      const reserved = new Set<string>()
+      const outputPaths: string[] = []
+      for (const file of stored.plannedFiles) {
+        const baseOutputPath = buildSanitizedOutputPath(
+          file.snapshot.absolutePath,
+          request.outputMode,
+          request.outputSuffix
+        )
+        const outputPath =
+          request.outputMode === 'overwrite'
+            ? baseOutputPath
+            : await findAvailableSanitizedOutputPath(baseOutputPath, reserved)
+        reserved.add(normalizeFileIdentity(outputPath))
+        outputPaths.push(outputPath)
+      }
       assertUniqueOutputPaths(outputPaths)
       const reportPaths = buildReportPaths(request.taskId, outputDirectory)
-      await Promise.all(
-        [...outputPaths, reportPaths.json, reportPaths.html].map(assertOutputAvailable)
-      )
+      await Promise.all([reportPaths.json, reportPaths.html].map(assertOutputAvailable))
       await Promise.all(
         stored.plannedFiles.map((file) => assertInputUnchanged(file.snapshot, signal))
       )
@@ -313,6 +335,8 @@ export class SanitizationJob {
             temporaryPath: temporaryPaths[index] as string,
             outputPath,
             verification: verifications[index] as VerificationReport,
+            mode: request.outputMode,
+            outputDirectory: dirname(file.snapshot.absolutePath),
             signal
           })
         )

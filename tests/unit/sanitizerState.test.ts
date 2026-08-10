@@ -5,7 +5,6 @@ import {
   type SanitizationPreview,
   type SanitizationTaskResult,
   type SelectedInputFile,
-  type SelectedOutputDirectory,
   type TaskProgress
 } from '../../src/shared/contracts'
 import {
@@ -18,11 +17,6 @@ const TASK_ID = '10000000-0000-4000-8000-000000000001'
 const OTHER_TASK_ID = '10000000-0000-4000-8000-000000000002'
 const INPUT_ID = '20000000-0000-4000-8000-000000000001'
 const OTHER_INPUT_ID = '20000000-0000-4000-8000-000000000002'
-const OUTPUT_DIRECTORY: SelectedOutputDirectory = {
-  schemaVersion: 1,
-  outputDirectoryId: '30000000-0000-4000-8000-000000000001',
-  displayName: '安全输出'
-}
 const INPUT: SelectedInputFile = {
   inputId: INPUT_ID,
   displayName: '资格审查.docx',
@@ -43,9 +37,8 @@ describe('sanitizerReducer', () => {
     expect(sanitizerReducer(running, { type: 'selection-started' })).toBe(running)
   })
 
-  it('accepts non-empty files only while selecting and preserves the output choice', () => {
-    const old = withOutput(selectedState())
-    const selecting = sanitizerReducer(old, { type: 'selection-started' })
+  it('accepts non-empty files only while selecting', () => {
+    const selecting = sanitizerReducer(selectedState(), { type: 'selection-started' })
     const nextFile = { ...INPUT, inputId: OTHER_INPUT_ID, displayName: '技术标.pdf' }
     const selected = sanitizerReducer(selecting, {
       type: 'files-selected',
@@ -55,22 +48,8 @@ describe('sanitizerReducer', () => {
     expect(selected.stage).toBe('idle')
     expect(selected.files).toEqual([nextFile])
     expect(selected.preview).toBeNull()
-    expect(selected.outputDirectory).toEqual(OUTPUT_DIRECTORY)
     expect(sanitizerReducer(selected, { type: 'files-selected', files: [INPUT] })).toBe(selected)
     expect(sanitizerReducer(selecting, { type: 'files-selected', files: [] })).toBe(selecting)
-  })
-
-  it('changes output only outside active processing', () => {
-    const selected = selectedState()
-    expect(
-      sanitizerReducer(selected, { type: 'output-selected', directory: OUTPUT_DIRECTORY })
-        .outputDirectory
-    ).toEqual(OUTPUT_DIRECTORY)
-
-    const running = runningState()
-    expect(
-      sanitizerReducer(running, { type: 'output-selected', directory: OUTPUT_DIRECTORY })
-    ).toBe(running)
   })
 
   it('starts preview only from idle with selected files', () => {
@@ -158,26 +137,23 @@ describe('sanitizerReducer', () => {
     ).toBe(false)
   })
 
-  it('requires acknowledgement, output directory, and a blocker-free preview to execute', () => {
+  it('requires acknowledgement and a blocker-free preview to execute', () => {
     const awaiting = awaitingState()
     expect(sanitizerReducer(awaiting, { type: 'execution-started' })).toBe(awaiting)
 
     const acknowledged = { ...awaiting, acknowledged: true }
-    expect(sanitizerReducer(acknowledged, { type: 'execution-started' })).toBe(acknowledged)
+    expect(sanitizerReducer(acknowledged, { type: 'execution-started' })).toMatchObject({
+      stage: 'running',
+      progress: 0.05,
+      cancelling: false
+    })
 
     const blocked = {
-      ...withOutput(acknowledged),
+      ...awaiting,
+      acknowledged: true,
       preview: preview({ blocked: true })
     }
     expect(sanitizerReducer(blocked, { type: 'execution-started' })).toBe(blocked)
-
-    expect(sanitizerReducer(withOutput(acknowledged), { type: 'execution-started' })).toMatchObject(
-      {
-        stage: 'running',
-        progress: 0.05,
-        cancelling: false
-      }
-    )
   })
 
   it('accepts progress only for the active task and maps running/verifying stages', () => {
@@ -388,13 +364,9 @@ function awaitingState(): SanitizerState {
   })
 }
 
-function withOutput(state: SanitizerState): SanitizerState {
-  return sanitizerReducer(state, { type: 'output-selected', directory: OUTPUT_DIRECTORY })
-}
-
 function runningState(): SanitizerState {
   const ready = {
-    ...withOutput(awaitingState()),
+    ...awaitingState(),
     acknowledged: true
   }
   return sanitizerReducer(ready, { type: 'execution-started' })

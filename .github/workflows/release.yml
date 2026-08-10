@@ -1,23 +1,25 @@
-name: Release v1.0.0
+name: Release
 
 on:
   push:
     tags:
-      - v1.0.0
+      - 'v*'
 
 permissions:
   actions: read
   contents: write
 
 concurrency:
-  group: release-v1.0.0
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   publish:
-    name: Publish verified v1.0.0 assets
+    name: Publish verified release assets
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      VERSION: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,9 +29,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REF_NAME}" = "v1.0.0"
-          test "$(node -p "require('./package.json').version")" = "1.0.0"
-          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 refs/tags/v1.0.0)"
+          version="${GITHUB_REF_NAME#v}"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+          test "$(node -p "require('./package.json').version")" = "${version}"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "refs/tags/${GITHUB_REF_NAME}")"
 
       - name: Wait for successful CI run for this exact commit
         id: ci
@@ -87,6 +90,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
           shopt -s nullglob
           linux_appimages=(release-assets/linux/*.AppImage)
           linux_debs=(release-assets/linux/*.deb)
@@ -100,13 +104,14 @@ jobs:
           test -f release-assets/windows/latest.yml
           test ! -e release-assets/linux/builder-debug.yml
           test ! -e release-assets/windows/builder-debug.yml
-          grep -Eq '^version: 1\.0\.0$' release-assets/linux/latest-linux.yml
-          grep -Eq '^version: 1\.0\.0$' release-assets/windows/latest.yml
-          grep -Eq '^path: bid-sentry-1\.0\.0-linux-x86_64\.AppImage$' release-assets/linux/latest-linux.yml
-          grep -Eq '^path: bid-sentry-setup-1\.0\.0-win-x64\.exe$' release-assets/windows/latest.yml
-          node - <<'NODE'
+          grep -Fxq "version: ${version}" release-assets/linux/latest-linux.yml
+          grep -Fxq "version: ${version}" release-assets/windows/latest.yml
+          grep -Fxq "path: bid-sentry-${version}-linux-x86_64.AppImage" release-assets/linux/latest-linux.yml
+          grep -Fxq "path: bid-sentry-setup-${version}-win-x64.exe" release-assets/windows/latest.yml
+          VERSION="${version}" node - <<'NODE'
           const { createHash } = require('node:crypto')
           const { readFileSync } = require('node:fs')
+          const version = process.env.VERSION
           function metadataSha512(metadataPath, targetName) {
             const lines = readFileSync(metadataPath, 'utf8').split(/\r?\n/u)
             const index = lines.findIndex((line) => line.trim() === `- url: ${targetName}`)
@@ -127,11 +132,11 @@ jobs:
           }
           assertMetadata(
             'release-assets/linux/latest-linux.yml',
-            'release-assets/linux/bid-sentry-1.0.0-linux-x86_64.AppImage'
+            `release-assets/linux/bid-sentry-${version}-linux-x86_64.AppImage`
           )
           assertMetadata(
             'release-assets/windows/latest.yml',
-            'release-assets/windows/bid-sentry-setup-1.0.0-win-x64.exe'
+            `release-assets/windows/bid-sentry-setup-${version}-win-x64.exe`
           )
           NODE
           test -f release-assets/linux/SHA256SUMS
@@ -173,37 +178,39 @@ jobs:
           test "$(find release-assets/final -maxdepth 1 -type f | wc -l)" -eq 9
           test "$(find release-assets/final -maxdepth 1 -type f -name '*.7z' | wc -l)" -eq 0
 
-      - name: Create or update the single GitHub Release
+      - name: Create or update the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          tag="${GITHUB_REF_NAME}"
           notes='release-notes.md'
-          cat > "$notes" <<'EOF'
-          # Bid Sentry v1.0.0
+          cat > "$notes" <<EOF
+          # Bid Sentry v${version}
 
-          首个完整产品版本：元数据安全重置、招投标文件对照审查、资格标模板预制作、可选系统托盘和确认式 GitHub Releases 更新。
+          元数据安全重置、招投标文件对照审查、资格标模板预制作、可选系统托盘和确认式 GitHub Releases 更新。各版本变更明细见仓库 CHANGELOG.md。
 
-          OCR 暂不支持；扫描 PDF 的审查/预制作需要可靠文本层；生成 DOCX 和 AI finding 都需要人工复核。发布包未做代码签名，请核对 `SHA256SUMS`。
+          OCR 暂不支持；扫描 PDF 的审查/预制作需要可靠文本层；生成 DOCX 和 AI finding 都需要人工复核。发布包未做代码签名，请核对 SHA256SUMS。
           EOF
-          if gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             # A published release is immutable for this workflow. A draft may
             # be resumed only when every existing asset is an exact byte match
             # for this build. Partial uploads are valid and are completed below;
             # unexpected assets, stale metadata, or mismatched bytes stop here.
-            release_json="$(gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,title,body,assets)"
+            release_json="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,title,body,assets)"
             test "$(jq -r '.isDraft' <<<"$release_json")" = "true"
             test "$(jq -r '.isPrerelease' <<<"$release_json")" = "false"
-            if [[ "$(jq -r '.title' <<<"$release_json")" != 'Bid Sentry v1.0.0' || "$(jq -r '.body' <<<"$release_json")" != "$(cat "$notes")" ]]; then
-              gh release edit v1.0.0 --repo "$GITHUB_REPOSITORY" --draft --title 'Bid Sentry v1.0.0' --notes-file "$notes"
-              release_json="$(gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,title,body,assets)"
+            if [[ "$(jq -r '.title' <<<"$release_json")" != "Bid Sentry v${version}" || "$(jq -r '.body' <<<"$release_json")" != "$(cat "$notes")" ]]; then
+              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft --title "Bid Sentry v${version}" --notes-file "$notes"
+              release_json="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,title,body,assets)"
             fi
             rm -rf existing-release
             mkdir -p existing-release
             mapfile -t draft_asset_names < <(jq -r '.assets[]?.name' <<<"$release_json")
             for asset_name in "${draft_asset_names[@]}"; do
-              gh release download v1.0.0 \
+              gh release download "$tag" \
                 --repo "$GITHUB_REPOSITORY" \
                 --pattern "$asset_name" \
                 --dir existing-release
@@ -245,13 +252,13 @@ jobs:
             done < release-assets/expected-assets.txt
             if ((${#missing_assets[@]} > 0)); then
               # Existing bytes were verified above; only add missing names.
-              gh release upload v1.0.0 --repo "$GITHUB_REPOSITORY" "${missing_assets[@]}"
+              gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "${missing_assets[@]}"
             fi
           else
-            gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title 'Bid Sentry v1.0.0' --notes-file "$notes"
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "Bid Sentry v${version}" --notes-file "$notes"
             mapfile -t upload_names < <(find release-assets/final -maxdepth 1 -type f ! -name 'release-manifest.json' -printf '%p\n' | sort)
-            gh release upload v1.0.0 --repo "$GITHUB_REPOSITORY" "${upload_names[@]}"
-            gh release upload v1.0.0 --repo "$GITHUB_REPOSITORY" release-assets/final/release-manifest.json
+            gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "${upload_names[@]}"
+            gh release upload "$tag" --repo "$GITHUB_REPOSITORY" release-assets/final/release-manifest.json
           fi
-          diff -u release-assets/expected-assets.txt <(gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
-          gh release edit v1.0.0 --repo "$GITHUB_REPOSITORY" --draft=false
+          diff -u release-assets/expected-assets.txt <(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false

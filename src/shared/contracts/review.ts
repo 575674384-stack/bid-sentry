@@ -52,7 +52,6 @@ export const ReviewRequestSchema = z
     taskId: z.string().uuid(),
     tenderInputId: z.string().uuid(),
     bidInputId: z.string().uuid(),
-    outputDirectoryId: z.string().uuid(),
     bidderName: z.string().trim().min(1).max(300),
     aiConfirmed: z.boolean()
   })

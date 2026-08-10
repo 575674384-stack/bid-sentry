@@ -153,7 +153,8 @@ describe('review and generation domain rules', () => {
         email: '',
         projectName: '',
         sectionName: '',
-        compilationDate: ''
+        compilationDate: '',
+        extraFields: []
       },
       input.sha256
     )
@@ -210,7 +211,8 @@ describe('review and generation domain rules', () => {
         email: '',
         projectName: '',
         sectionName: '',
-        compilationDate: ''
+        compilationDate: '',
+        extraFields: []
       }
     )
     expect(plan.actions).toEqual([
@@ -266,7 +268,8 @@ describe('review and generation domain rules', () => {
         email: '',
         projectName: '',
         sectionName: '',
-        compilationDate: ''
+        compilationDate: '',
+        extraFields: []
       }
     )
     expect(plan.actions).toEqual(
@@ -323,7 +326,8 @@ describe('review and generation domain rules', () => {
         email: '',
         projectName: '',
         sectionName: '',
-        compilationDate: ''
+        compilationDate: '',
+        extraFields: []
       }
     )
     expect(plan.unknownRequired).toBe(1)
@@ -376,7 +380,8 @@ describe('review and generation domain rules', () => {
         email: '',
         projectName: '',
         sectionName: '',
-        compilationDate: ''
+        compilationDate: '',
+        extraFields: []
       }
     )
     expect(plan.actions.filter((action) => action.action === 'placeholder')).toHaveLength(2)

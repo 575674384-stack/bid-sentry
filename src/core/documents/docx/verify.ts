@@ -147,8 +147,15 @@ function metadataCheck(
     }
   }
 
-  const created = outputOccurrences.find((occurrence) => occurrence.field === 'core:created')
-  const modified = outputOccurrences.find((occurrence) => occurrence.field === 'core:modified')
+  // The created≤modified invariant only constrains randomized timestamps.
+  // Preserved document dates are historical facts and may legitimately be in
+  // any order; they are covered by the unchanged-value check above instead.
+  const created = outputOccurrences.find(
+    (occurrence) => occurrence.field === 'core:created' && occurrence.action === 'randomize'
+  )
+  const modified = outputOccurrences.find(
+    (occurrence) => occurrence.field === 'core:modified' && occurrence.action === 'randomize'
+  )
   if (
     created &&
     modified &&

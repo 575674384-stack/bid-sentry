@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { dirname } from 'node:path'
 import { ZodError } from 'zod'
 import {
   AiConnectionTestRequestSchema,
@@ -23,17 +24,20 @@ import {
   ReviewStartRequestSchema,
   ReviewRunRequestSchema,
   ReviewCancelRequestSchema,
-  GenerationPreviewRequestSchema,
-  GenerationRequestSchema,
-  GenerationCancelRequestSchema,
+  GenerationAnalyzeRequestSchema,
+  GenerationPlanRequestSchema,
+  GenerationRunRequestSchema,
   createAppError,
   toSafeAppError,
   withDiagnostic,
   type AppError,
+  type FileSystemIdentity,
+  type InputSnapshot,
   type IpcResponseEnvelope,
   type TaskProgress
 } from '../../shared/contracts'
 import { createInputSnapshot, DocumentSafetyError } from '../../core/documents/fileSafety'
+import { resolvePathIdentityWithoutSymbolicLinks } from '../../core/documents/pathSafety'
 import { testOpenAiCompatibleConnection } from '../ai/openAiCompatibleClient'
 import { normalizeAiBaseUrl, type SettingsService } from '../settings/settingsService'
 import { TaskManagerError, type TaskManager } from '../tasks/taskManager'
@@ -68,7 +72,6 @@ export interface RegisterIpcDependencies {
   pathRegistry?: PathRegistry
   appVersion: string
   selectInputPaths(): Promise<readonly string[] | null>
-  selectOutputDirectory(): Promise<string | null>
   showResultInFolder(absolutePath: string): void
   onSettingsChanged?(settings: Awaited<ReturnType<SettingsService['getPublicSettings']>>): void
   updateService?: UpdateService
@@ -86,6 +89,7 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
   const reviewTaskOwners = new Map<string, number>()
   const generationTaskOwners = new Map<string, number>()
   const pendingCompletions = new Map<string, TaskProgress>()
+  const sanitizationTaskInputs = new Map<string, readonly InputSnapshot[]>()
   const senders = new Map<number, IpcSender>()
   const registeredChannels: string[] = []
 
@@ -99,6 +103,7 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
       }
       taskOwners.delete(taskId)
       pendingCompletions.delete(taskId)
+      sanitizationTaskInputs.delete(taskId)
     }
     for (const [taskId, taskOwnerId] of reviewTaskOwners) {
       if (taskOwnerId !== ownerId) continue
@@ -220,8 +225,8 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
         const tender = registry.resolveInputs(event.sender.id, [request.tenderInputId])[0]
         const bid = registry.resolveInputs(event.sender.id, [request.bidInputId])[0]
         if (!tender || !bid) throw new DocumentSafetyError('INVALID_REQUEST')
-        const output = registry.resolveOutputDirectory(event.sender.id, request.outputDirectoryId)
         assertTaskOwner(reviewTaskOwners, request.taskId, event.sender.id)
+        const output = await deriveInputDirectory(bid.snapshot)
         try {
           const result = await dependencies.reviewTaskManager?.run(
             request,
@@ -253,43 +258,55 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
   }
   if (dependencies.generationTaskManager) {
     register(
-      IPC_CHANNELS.generationPreview,
-      GenerationPreviewRequestSchema,
-      IPC_RESPONSE_DATA_SCHEMAS.generationPreview,
+      IPC_CHANNELS.generationAnalyze,
+      GenerationAnalyzeRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.generationAnalyze,
       async (event, request) => {
         const input = registry.resolveInputs(event.sender.id, [request.inputId])[0]
         if (!input) throw new DocumentSafetyError('INVALID_REQUEST')
-        // Main allocates and claims the preview capability before any file
-        // parsing.  A destroyed renderer can therefore cancel an in-flight
-        // preview instead of leaving document text owned by a dead sender.
-        const previewTaskId = randomUUID()
-        generationTaskOwners.set(previewTaskId, event.sender.id)
+        // Main allocates and claims the analysis capability before any file
+        // parsing. A destroyed renderer can therefore cancel an in-flight
+        // analysis instead of leaving document text owned by a dead sender.
+        const analysisTaskId = randomUUID()
+        generationTaskOwners.set(analysisTaskId, event.sender.id)
         try {
-          const preview = await dependencies.generationTaskManager?.preview(
+          const analysis = await dependencies.generationTaskManager?.analyze(
             request,
             input.snapshot,
-            previewTaskId
+            analysisTaskId
           )
-          if (!preview) throw new DocumentSafetyError('INTERNAL_ERROR')
+          if (!analysis) throw new DocumentSafetyError('INTERNAL_ERROR')
           if (event.sender.isDestroyed()) throw new DocumentSafetyError('TASK_CANCELLED')
-          if (preview.taskId !== previewTaskId) throw new DocumentSafetyError('INTERNAL_ERROR')
-          return preview
+          if (analysis.taskId !== analysisTaskId) throw new DocumentSafetyError('INTERNAL_ERROR')
+          return analysis
         } catch (error) {
-          dependencies.generationTaskManager?.cancel(previewTaskId)
-          generationTaskOwners.delete(previewTaskId)
+          dependencies.generationTaskManager?.cancel(analysisTaskId)
+          generationTaskOwners.delete(analysisTaskId)
           throw error
         }
       }
     )
     register(
+      IPC_CHANNELS.generationPlan,
+      GenerationPlanRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.generationPlan,
+      async (event, request) => {
+        assertTaskOwner(generationTaskOwners, request.analysisTaskId, event.sender.id)
+        const plan = await dependencies.generationTaskManager?.plan(request)
+        if (!plan) throw new DocumentSafetyError('INTERNAL_ERROR')
+        if (event.sender.isDestroyed()) throw new DocumentSafetyError('TASK_CANCELLED')
+        return plan
+      }
+    )
+    register(
       IPC_CHANNELS.generationRun,
-      GenerationRequestSchema,
+      GenerationRunRequestSchema,
       IPC_RESPONSE_DATA_SCHEMAS.generationRun,
       async (event, request) => {
         const input = registry.resolveInputs(event.sender.id, [request.inputId])[0]
         if (!input) throw new DocumentSafetyError('INVALID_REQUEST')
-        const output = registry.resolveOutputDirectory(event.sender.id, request.outputDirectoryId)
-        assertTaskOwner(generationTaskOwners, request.previewTaskId, event.sender.id)
+        assertTaskOwner(generationTaskOwners, request.analysisTaskId, event.sender.id)
+        const output = await deriveInputDirectory(input.snapshot)
         try {
           const result = await dependencies.generationTaskManager?.run(
             request,
@@ -300,15 +317,15 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
           if (!result) throw new DocumentSafetyError('INTERNAL_ERROR')
           return registry.registerGenerationResult(event.sender.id, output.absolutePath, result)
         } finally {
-          if (!dependencies.generationTaskManager?.hasPreview(request.previewTaskId)) {
-            generationTaskOwners.delete(request.previewTaskId)
+          if (!dependencies.generationTaskManager?.hasTask(request.analysisTaskId)) {
+            generationTaskOwners.delete(request.analysisTaskId)
           }
         }
       }
     )
     register(
       IPC_CHANNELS.generationCancel,
-      GenerationCancelRequestSchema,
+      TaskCancelRequestSchema,
       IPC_RESPONSE_DATA_SCHEMAS.generationCancel,
       async (event, request) => {
         assertTaskOwner(generationTaskOwners, request.taskId, event.sender.id)
@@ -358,30 +375,28 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
     }
   )
   register(
-    IPC_CHANNELS.filesSelectOutput,
-    EmptyPayloadSchema,
-    IPC_RESPONSE_DATA_SCHEMAS.filesSelectOutput,
-    async (event) => {
-      const directory = await dependencies.selectOutputDirectory()
-      return directory ? registry.registerOutputDirectory(event.sender.id, directory) : null
-    }
-  )
-  register(
     IPC_CHANNELS.sanitizePreview,
     SanitizationPreviewRequestSchema,
     IPC_RESPONSE_DATA_SCHEMAS.sanitizePreview,
     async (event, request) => {
       const taskId = randomUUID()
       taskOwners.set(taskId, event.sender.id)
+      const inputs = registry.resolveInputs(event.sender.id, request.inputIds)
       try {
-        return await dependencies.taskManager.preview({
+        const preview = await dependencies.taskManager.preview({
           schemaVersion: 1,
           type: 'preview',
           taskId,
-          inputs: registry.resolveInputs(event.sender.id, request.inputIds)
+          inputs
         })
+        sanitizationTaskInputs.set(
+          taskId,
+          inputs.map((input) => input.snapshot)
+        )
+        return preview
       } catch (error) {
         taskOwners.delete(taskId)
+        sanitizationTaskInputs.delete(taskId)
         throw error
       }
     }
@@ -392,25 +407,27 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
     IPC_RESPONSE_DATA_SCHEMAS.sanitizeExecute,
     async (event, command) => {
       assertTaskOwner(taskOwners, command.taskId, event.sender.id)
-      const outputDirectory = registry.resolveOutputDirectory(
-        event.sender.id,
-        command.outputDirectoryId
-      )
+      const inputs = sanitizationTaskInputs.get(command.taskId)
+      if (!inputs || inputs.length === 0) throw new DocumentSafetyError('INVALID_REQUEST')
+      const settings = await dependencies.settingsService.getPublicSettings()
       try {
-        const result = await dependencies.taskManager.execute(
-          {
-            schemaVersion: 1,
-            type: 'execute',
-            taskId: command.taskId,
-            planDigest: command.planDigest,
-            outputDirectory: outputDirectory.absolutePath,
-            appVersion: dependencies.appVersion
-          },
-          outputDirectory.identity
+        const result = await dependencies.taskManager.execute({
+          schemaVersion: 1,
+          type: 'execute',
+          taskId: command.taskId,
+          planDigest: command.planDigest,
+          outputMode: settings.outputMode,
+          outputSuffix: settings.outputSuffix,
+          appVersion: dependencies.appVersion
+        })
+        return registry.registerTaskResult(
+          event.sender.id,
+          inputs.map((snapshot) => dirname(snapshot.absolutePath)),
+          result
         )
-        return registry.registerTaskResult(event.sender.id, outputDirectory.absolutePath, result)
       } finally {
         taskOwners.delete(command.taskId)
+        sanitizationTaskInputs.delete(command.taskId)
       }
     },
     (event, data) => {
@@ -461,6 +478,7 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
     if (progress.state === 'failed' || progress.state === 'cancelled') {
       taskOwners.delete(progress.taskId)
       pendingCompletions.delete(progress.taskId)
+      sanitizationTaskInputs.delete(progress.taskId)
     }
   })
 
@@ -470,6 +488,7 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
     for (const ownerId of [...senders.keys()]) disposeOwner(ownerId)
     taskOwners.clear()
     pendingCompletions.clear()
+    sanitizationTaskInputs.clear()
   }
 }
 
@@ -545,4 +564,20 @@ function assertTaskOwner(
   ownerId: number
 ): void {
   if (owners.get(taskId) !== ownerId) throw new DocumentSafetyError('INVALID_REQUEST')
+}
+
+/**
+ * Outputs always live next to their own input file. The input snapshot path
+ * was canonicalized at selection time, so its directory is the only output
+ * location the user ever authorizes.
+ */
+async function deriveInputDirectory(
+  snapshot: InputSnapshot
+): Promise<{ absolutePath: string; identity: FileSystemIdentity }> {
+  const resolved = await resolvePathIdentityWithoutSymbolicLinks(
+    dirname(snapshot.absolutePath)
+  ).catch((error: unknown) => {
+    throw new DocumentSafetyError('INVALID_DOCUMENT', error)
+  })
+  return { absolutePath: resolved.canonicalPath, identity: resolved.identity }
 }

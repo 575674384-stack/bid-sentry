@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +11,7 @@ import { generateDocxFromTemplate } from '../../src/core/generation/docx'
 import { resolvePathIdentityWithoutSymbolicLinks } from '../../src/core/documents/pathSafety'
 import { writeDocxFixture } from '../fixtures/builders/docxFixture'
 import { writePdfFixture } from '../fixtures/builders/pdfFixture'
+import type { GenerationUserForm } from '../../src/shared/contracts'
 
 const directories: string[] = []
 afterEach(async () =>
@@ -17,6 +19,27 @@ afterEach(async () =>
     directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
   )
 )
+
+function userForm(bidderName = '示例投标单位'): GenerationUserForm {
+  return {
+    bidderName,
+    unifiedSocialCreditCode: '',
+    address: '',
+    legalRepresentative: '',
+    authorizedRepresentative: '',
+    contact: '',
+    phone: '',
+    email: '',
+    projectName: '',
+    sectionName: '',
+    compilationDate: '',
+    extraFields: []
+  }
+}
+
+async function directoryIdentity(directory: string) {
+  return (await resolvePathIdentityWithoutSymbolicLinks(directory)).identity
+}
 
 describe('GenerationTaskManager', () => {
   it('generates a new DOCX from the selected template without modifying input', async () => {
@@ -33,38 +56,30 @@ describe('GenerationTaskManager', () => {
     })
     const before = await readFile(inputPath)
     const input = await createInputSnapshot(inputPath)
-    const outputDirectoryIdentity = (await resolvePathIdentityWithoutSymbolicLinks(directory))
-      .identity
+    const outputDirectoryIdentity = await directoryIdentity(directory)
     const manager = new GenerationTaskManager()
-    const userForm = {
-      bidderName: '示例投标单位',
-      unifiedSocialCreditCode: '',
-      address: '',
-      legalRepresentative: '',
-      authorizedRepresentative: '',
-      contact: '',
-      phone: '',
-      email: '',
-      projectName: '',
-      sectionName: '',
-      compilationDate: ''
-    }
-    const preview = await manager.preview(
-      { schemaVersion: 1, inputId: '123e4567-e89b-42d3-a456-426614174000', userForm },
-      input
+    const taskId = randomUUID()
+    const analysis = await manager.analyze(
+      { schemaVersion: 1, inputId: '123e4567-e89b-42d3-a456-426614174000' },
+      input,
+      taskId
     )
-    const candidate = preview.candidates[0]
+    const candidate = analysis.candidates[0]
     expect(candidate).toBeDefined()
+    const plan = await manager.plan({
+      schemaVersion: 1,
+      analysisTaskId: taskId,
+      candidateId: candidate!.candidateId,
+      userForm: userForm()
+    })
     const result = await manager.run(
       {
         schemaVersion: 1,
         inputId: '123e4567-e89b-42d3-a456-426614174000',
-        outputDirectoryId: '223e4567-e89b-42d3-a456-426614174000',
-        previewTaskId: preview.taskId,
+        analysisTaskId: taskId,
         candidateId: candidate!.candidateId,
-        planId: preview.plans.find((plan) => plan.candidateId === candidate!.candidateId)!.planId,
-        planDigest: preview.plans.find((plan) => plan.candidateId === candidate!.candidateId)!
-          .planDigest,
+        planId: plan.planId,
+        planDigest: plan.planDigest,
         confirmed: true
       },
       input,
@@ -113,35 +128,28 @@ describe('GenerationTaskManager', () => {
       externalDocumentRelationship: false
     })
     const input = await createInputSnapshot(inputPath)
-    const outputDirectoryIdentity = (await resolvePathIdentityWithoutSymbolicLinks(directory))
-      .identity
+    const outputDirectoryIdentity = await directoryIdentity(directory)
     const manager = new GenerationTaskManager()
-    const userForm = {
-      bidderName: '确认计划单位',
-      unifiedSocialCreditCode: '',
-      address: '',
-      legalRepresentative: '',
-      authorizedRepresentative: '',
-      contact: '',
-      phone: '',
-      email: '',
-      projectName: '',
-      sectionName: '',
-      compilationDate: ''
-    }
-    const preview = await manager.preview(
-      { schemaVersion: 1, inputId: '123e4567-e89b-42d3-a456-426614174000', userForm },
-      input
+    const taskId = randomUUID()
+    const analysis = await manager.analyze(
+      { schemaVersion: 1, inputId: '123e4567-e89b-42d3-a456-426614174000' },
+      input,
+      taskId
     )
-    const plan = preview.plans[0]!
+    const candidate = analysis.candidates[0]!
+    const plan = await manager.plan({
+      schemaVersion: 1,
+      analysisTaskId: taskId,
+      candidateId: candidate.candidateId,
+      userForm: userForm('确认计划单位')
+    })
     await expect(
       manager.run(
         {
           schemaVersion: 1,
           inputId: '123e4567-e89b-42d3-a456-426614174000',
-          outputDirectoryId: '223e4567-e89b-42d3-a456-426614174000',
-          previewTaskId: preview.taskId,
-          candidateId: plan.candidateId,
+          analysisTaskId: taskId,
+          candidateId: candidate.candidateId,
           planId: plan.planId,
           planDigest: '0'.repeat(64),
           confirmed: true
@@ -166,44 +174,32 @@ describe('GenerationTaskManager', () => {
       externalDocumentRelationship: false
     })
     const input = await createInputSnapshot(inputPath)
-    const outputDirectoryIdentity = (await resolvePathIdentityWithoutSymbolicLinks(directory))
-      .identity
+    const outputDirectoryIdentity = await directoryIdentity(directory)
     const manager = new GenerationTaskManager()
-    const preview = await manager.preview(
-      {
-        schemaVersion: 1,
-        inputId: '123e4567-e89b-42d3-a456-426614174000',
-        userForm: {
-          bidderName: '多节单位',
-          unifiedSocialCreditCode: '',
-          address: '',
-          legalRepresentative: '',
-          authorizedRepresentative: '',
-          contact: '',
-          phone: '',
-          email: '',
-          projectName: '',
-          sectionName: '',
-          compilationDate: ''
-        }
-      },
-      input
+    const taskId = randomUUID()
+    const analysis = await manager.analyze(
+      { schemaVersion: 1, inputId: '123e4567-e89b-42d3-a456-426614174000' },
+      input,
+      taskId
     )
-    const firstCandidate = preview.candidates.find((candidate) =>
+    const firstCandidate = analysis.candidates.find((candidate) =>
       candidate.title.includes('资格审查')
     )
     expect(firstCandidate).toBeDefined()
-    const firstPlan = preview.plans.find((plan) => plan.candidateId === firstCandidate!.candidateId)
-    expect(firstPlan).toBeDefined()
+    const firstPlan = await manager.plan({
+      schemaVersion: 1,
+      analysisTaskId: taskId,
+      candidateId: firstCandidate!.candidateId,
+      userForm: userForm('多节单位')
+    })
     const result = await manager.run(
       {
         schemaVersion: 1,
         inputId: '123e4567-e89b-42d3-a456-426614174000',
-        outputDirectoryId: '223e4567-e89b-42d3-a456-426614174000',
-        previewTaskId: preview.taskId,
+        analysisTaskId: taskId,
         candidateId: firstCandidate!.candidateId,
-        planId: firstPlan!.planId,
-        planDigest: firstPlan!.planDigest,
+        planId: firstPlan.planId,
+        planDigest: firstPlan.planDigest,
         confirmed: true
       },
       input,
@@ -253,30 +249,18 @@ describe('GenerationTaskManager', () => {
     expect(secondOutput.entries.some((entry) => entry.name === 'word/footer1.xml')).toBe(false)
   })
 
-  it('refuses to preview a document when no explicit template range exists', async () => {
+  it('refuses to analyze a document when no explicit template range exists', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'bid-sentry-generation-no-template-'))
     directories.push(directory)
     const inputPath = join(directory, 'ordinary.docx')
     await writeDocxFixture(inputPath)
     const input = await createInputSnapshot(inputPath)
     const manager = new GenerationTaskManager()
-    const userForm = {
-      bidderName: '示例投标单位',
-      unifiedSocialCreditCode: '',
-      address: '',
-      legalRepresentative: '',
-      authorizedRepresentative: '',
-      contact: '',
-      phone: '',
-      email: '',
-      projectName: '',
-      sectionName: '',
-      compilationDate: ''
-    }
     await expect(
-      manager.preview(
-        { schemaVersion: 1, inputId: '123e4567-e89b-42d3-a456-426614174000', userForm },
-        input
+      manager.analyze(
+        { schemaVersion: 1, inputId: '123e4567-e89b-42d3-a456-426614174000' },
+        input,
+        randomUUID()
       )
     ).rejects.toMatchObject({ appError: { code: 'INVALID_REQUEST' } })
   })
@@ -287,35 +271,29 @@ describe('GenerationTaskManager', () => {
     const inputPath = join(directory, 'tender.pdf')
     await writePdfFixture(inputPath, { qualificationTemplate: true })
     const input = await createInputSnapshot(inputPath)
-    const outputDirectoryIdentity = (await resolvePathIdentityWithoutSymbolicLinks(directory))
-      .identity
+    const outputDirectoryIdentity = await directoryIdentity(directory)
     const manager = new GenerationTaskManager()
-    const userForm = {
-      bidderName: '示例投标单位',
-      unifiedSocialCreditCode: '',
-      address: '',
-      legalRepresentative: '',
-      authorizedRepresentative: '',
-      contact: '',
-      phone: '',
-      email: '',
-      projectName: '',
-      sectionName: '',
-      compilationDate: ''
-    }
-    const preview = await manager.preview(
-      { schemaVersion: 1, inputId: '123e4567-e89b-42d3-a456-426614174000', userForm },
-      input
+    const taskId = randomUUID()
+    const analysis = await manager.analyze(
+      { schemaVersion: 1, inputId: '123e4567-e89b-42d3-a456-426614174000' },
+      input,
+      taskId
     )
+    const candidate = analysis.candidates[0]!
+    const plan = await manager.plan({
+      schemaVersion: 1,
+      analysisTaskId: taskId,
+      candidateId: candidate.candidateId,
+      userForm: userForm()
+    })
     const result = await manager.run(
       {
         schemaVersion: 1,
         inputId: '123e4567-e89b-42d3-a456-426614174000',
-        outputDirectoryId: '223e4567-e89b-42d3-a456-426614174000',
-        previewTaskId: preview.taskId,
-        candidateId: preview.candidates[0]!.candidateId,
-        planId: preview.plans[0]!.planId,
-        planDigest: preview.plans[0]!.planDigest,
+        analysisTaskId: taskId,
+        candidateId: candidate.candidateId,
+        planId: plan.planId,
+        planDigest: plan.planDigest,
         confirmed: true
       },
       input,
@@ -339,37 +317,27 @@ describe('GenerationTaskManager', () => {
     const inputPath = join(directory, 'layout.pdf')
     await writePdfFixture(inputPath, { qualificationTemplate: true, multiColumn: true })
     const input = await createInputSnapshot(inputPath)
-    const outputDirectoryIdentity = (await resolvePathIdentityWithoutSymbolicLinks(directory))
-      .identity
+    const outputDirectoryIdentity = await directoryIdentity(directory)
     const manager = new GenerationTaskManager()
-    const preview = await manager.preview(
-      {
-        schemaVersion: 1,
-        inputId: '123e4567-e89b-42d3-a456-426614174000',
-        userForm: {
-          bidderName: '布局示例单位',
-          unifiedSocialCreditCode: '',
-          address: '',
-          legalRepresentative: '',
-          authorizedRepresentative: '',
-          contact: '',
-          phone: '',
-          email: '',
-          projectName: '',
-          sectionName: '',
-          compilationDate: ''
-        }
-      },
-      input
+    const taskId = randomUUID()
+    const analysis = await manager.analyze(
+      { schemaVersion: 1, inputId: '123e4567-e89b-42d3-a456-426614174000' },
+      input,
+      taskId
     )
-    const plan = preview.plans[0]!
+    const candidate = analysis.candidates[0]!
+    const plan = await manager.plan({
+      schemaVersion: 1,
+      analysisTaskId: taskId,
+      candidateId: candidate.candidateId,
+      userForm: userForm('布局示例单位')
+    })
     const result = await manager.run(
       {
         schemaVersion: 1,
         inputId: '123e4567-e89b-42d3-a456-426614174000',
-        outputDirectoryId: '223e4567-e89b-42d3-a456-426614174000',
-        previewTaskId: preview.taskId,
-        candidateId: plan.candidateId,
+        analysisTaskId: taskId,
+        candidateId: candidate.candidateId,
         planId: plan.planId,
         planDigest: plan.planDigest,
         confirmed: true

@@ -241,7 +241,7 @@ describe('PDF metadata sanitizer', () => {
     const plan = await pdfDocumentAdapter.createPlan(input, inspection, signal)
     const workspace = await createTemporaryWorkspace(directory)
     const temporaryPath = await reserveTemporaryFile(workspace, 'tampered_sanitized.pdf')
-    const outputPath = buildSanitizedOutputPath(inputPath, directory)
+    const outputPath = buildSanitizedOutputPath(inputPath, 'suffix', '_已清洗')
 
     await pdfDocumentAdapter.sanitizeToTemp(input, plan, temporaryPath, signal)
     const tampered = await PDFDocument.load(await readFile(temporaryPath), {

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { lstat, link, mkdtemp, open, rm, unlink } from 'node:fs/promises'
+import { lstat, link, mkdtemp, open, rename, rm, unlink } from 'node:fs/promises'
 import { basename, dirname, extname, join, parse, resolve, sep } from 'node:path'
 import { DOMParser, onWarningStopParsing } from '@xmldom/xmldom'
 import * as yauzl from 'yauzl'
@@ -16,6 +16,7 @@ import {
   type DocumentType,
   type FileSystemIdentity,
   type InputSnapshot,
+  type OutputMode,
   type TemporaryWorkspaceDescriptor,
   type WorkspacePublicationArtifact,
   type VerificationReport
@@ -98,6 +99,12 @@ export class TemporaryWorkspace {
 export interface PublishedFile {
   absolutePath: string
   identity: FileSystemIdentity
+  /**
+   * Overwrite mode only: workspace hard link holding the original input bytes.
+   * Rollback renames it back over the published path; successful cleanup
+   * removes it together with the workspace.
+   */
+  backupPath?: string
 }
 
 export async function createInputSnapshot(
@@ -361,9 +368,49 @@ export async function reserveTemporaryFile(
   return temporaryPath
 }
 
-export function buildSanitizedOutputPath(inputPath: string, outputDirectory: string): string {
-  const parts = parse(basename(inputPath))
-  return join(resolve(outputDirectory), `${parts.name}_sanitized${parts.ext.toLowerCase()}`)
+const MAX_OUTPUT_NAME_ATTEMPTS = 99
+
+/**
+ * Output files always live next to their own input. `suffix` mode appends the
+ * configured (contract-validated) suffix to the input base name; `overwrite`
+ * mode returns the input path itself, which is replaced only after
+ * verification passed.
+ */
+export function buildSanitizedOutputPath(
+  inputPath: string,
+  mode: OutputMode,
+  suffix: string
+): string {
+  const resolvedInput = resolve(inputPath)
+  if (mode === 'overwrite') return resolvedInput
+  const parts = parse(basename(resolvedInput))
+  return join(dirname(resolvedInput), `${parts.name}${suffix}${parts.ext.toLowerCase()}`)
+}
+
+/**
+ * Picks a collision-free suffix-mode output path: a pre-existing
+ * `name<suffix>.ext` yields `name<suffix> (2).ext`, ` (3)`, and so on, up to
+ * a bounded number of attempts. `reserved` carries the normalized paths
+ * already claimed earlier in the same batch. Publication still treats a
+ * last-instant race (EEXIST) as a hard error.
+ */
+export async function findAvailableSanitizedOutputPath(
+  baseOutputPath: string,
+  reserved: ReadonlySet<string>
+): Promise<string> {
+  const parts = parse(baseOutputPath)
+  for (let attempt = 1; attempt <= MAX_OUTPUT_NAME_ATTEMPTS; attempt += 1) {
+    const candidate =
+      attempt === 1 ? baseOutputPath : join(parts.dir, `${parts.name} (${attempt})${parts.ext}`)
+    if (reserved.has(normalizeFileIdentity(candidate))) continue
+    try {
+      await lstat(candidate)
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'ENOENT') return candidate
+      throw error
+    }
+  }
+  throw new DocumentSafetyError('OUTPUT_EXISTS')
 }
 
 export async function assertOutputAvailable(outputPath: string): Promise<void> {
@@ -406,9 +453,12 @@ export async function finalizeVerifiedOutput(options: {
   temporaryPath: string
   outputPath: string
   verification: VerificationReport
+  mode?: OutputMode
+  outputDirectory?: string
   signal?: AbortSignal
 }): Promise<PublishedFile> {
   const { workspace, input, temporaryPath, outputPath, signal } = options
+  const mode = options.mode ?? 'suffix'
   assertTrustedWorkspace(workspace)
   await assertWorkspaceIdentities(workspace)
   throwIfAborted(signal)
@@ -423,10 +473,14 @@ export async function finalizeVerifiedOutput(options: {
   if (!workspace.contains(temporaryPath)) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
+  const expectedOutputDirectory = resolve(options.outputDirectory ?? workspace.outputDirectory)
   if (
     normalizeFileIdentity(dirname(resolve(outputPath))) !==
-    normalizeFileIdentity(workspace.outputDirectory)
+    normalizeFileIdentity(expectedOutputDirectory)
   ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  if (mode === 'overwrite' && resolve(outputPath) !== resolve(input.absolutePath)) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
   const temporaryInfo = await lstat(temporaryPath, { bigint: true })
@@ -444,27 +498,46 @@ export async function finalizeVerifiedOutput(options: {
   await handle.sync()
   await handle.close()
 
-  return publishReservedWorkspaceFile({ workspace, temporaryPath, outputPath })
+  return publishReservedWorkspaceFile({
+    workspace,
+    temporaryPath,
+    outputPath,
+    mode,
+    outputDirectory: expectedOutputDirectory
+  })
 }
 
 export async function publishReservedWorkspaceFile(options: {
   workspace: TemporaryWorkspace
   temporaryPath: string
   outputPath: string
+  mode?: OutputMode
+  outputDirectory?: string
 }): Promise<PublishedFile> {
   const { workspace, temporaryPath, outputPath } = options
+  const mode = options.mode ?? 'suffix'
   assertTrustedWorkspace(workspace)
   await assertWorkspaceIdentities(workspace)
+  const expectedOutputDirectory = resolve(options.outputDirectory ?? workspace.outputDirectory)
   if (
     !workspace.contains(temporaryPath) ||
     normalizeFileIdentity(dirname(resolve(outputPath))) !==
-      normalizeFileIdentity(workspace.outputDirectory)
+      normalizeFileIdentity(expectedOutputDirectory)
   ) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
   const temporaryInfo = await lstat(temporaryPath, { bigint: true })
   if (!temporaryInfo.isFile() || temporaryInfo.isSymbolicLink()) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  const identity = fileSystemIdentityFromBigInts(
+    temporaryInfo.dev,
+    temporaryInfo.ino,
+    temporaryInfo.mode
+  )
+
+  if (mode === 'overwrite') {
+    return publishVerifiedOverwrite(workspace, temporaryPath, resolve(outputPath), identity)
   }
 
   try {
@@ -475,14 +548,34 @@ export async function publishReservedWorkspaceFile(options: {
     }
     throw error
   }
-  return {
-    absolutePath: resolve(outputPath),
-    identity: fileSystemIdentityFromBigInts(
-      temporaryInfo.dev,
-      temporaryInfo.ino,
-      temporaryInfo.mode
-    )
+  return { absolutePath: resolve(outputPath), identity }
+}
+
+/**
+ * Replaces the input with the verified temporary file. The original bytes are
+ * first hard-linked into the workspace so a later publication failure can
+ * restore them, then the temporary file takes the input path in one atomic
+ * rename. The input is never replaced before verification passed.
+ */
+async function publishVerifiedOverwrite(
+  workspace: TemporaryWorkspace,
+  temporaryPath: string,
+  outputPath: string,
+  identity: FileSystemIdentity
+): Promise<PublishedFile> {
+  const backupPath = join(
+    workspace.rootPath,
+    `${randomUUID()}-${basename(outputPath)}.original-backup`
+  )
+  await link(outputPath, backupPath)
+  workspace.register(backupPath)
+  try {
+    await rename(temporaryPath, outputPath)
+  } catch (error) {
+    await unlink(backupPath).catch(() => undefined)
+    throw error
   }
+  return { absolutePath: outputPath, identity, backupPath }
 }
 
 /**
@@ -568,18 +661,23 @@ export async function rollbackPublishedFiles(files: readonly PublishedFile[]): P
         if (isNodeError(error) && error.code === 'ENOENT') return null
         throw error
       })
-      if (!current) continue
-      if (
-        !current.isFile() ||
-        current.isSymbolicLink() ||
-        !sameFileSystemIdentity(
-          fileSystemIdentityFromBigInts(current.dev, current.ino, current.mode),
-          file.identity
-        )
-      ) {
-        throw new DocumentSafetyError('INTERNAL_ERROR')
+      if (current) {
+        if (
+          !current.isFile() ||
+          current.isSymbolicLink() ||
+          !sameFileSystemIdentity(
+            fileSystemIdentityFromBigInts(current.dev, current.ino, current.mode),
+            file.identity
+          )
+        ) {
+          throw new DocumentSafetyError('INTERNAL_ERROR')
+        }
+        await unlink(file.absolutePath)
       }
-      await unlink(file.absolutePath)
+      if (file.backupPath) {
+        // Overwrite mode: put the original input bytes back in place.
+        await rename(file.backupPath, file.absolutePath)
+      }
     } catch (error) {
       failures.push(error)
     }

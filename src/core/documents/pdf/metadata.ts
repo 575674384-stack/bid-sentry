@@ -52,15 +52,10 @@ const INFO_SPECS: readonly PdfMetadataSpec[] = [
   infoSpec('Title', 'pdf:info:Title', 'description', 'string', 'description'),
   infoSpec('Subject', 'pdf:info:Subject', 'description', 'string', 'description'),
   infoSpec('Keywords', 'pdf:info:Keywords', 'description', 'string', 'description'),
-  infoSpec(
-    'CreationDate',
-    'pdf:info:CreationDate',
-    'timestamp',
-    'timestamp',
-    'timestamp',
-    'created'
-  ),
-  infoSpec('ModDate', 'pdf:info:ModDate', 'timestamp', 'timestamp', 'timestamp', 'modified'),
+  // Document timestamps are factual history, not identity: they are preserved
+  // byte-identical instead of randomized.
+  preserveInfoSpec('CreationDate', 'pdf:info:CreationDate', 'created'),
+  preserveInfoSpec('ModDate', 'pdf:info:ModDate', 'modified'),
   infoSpec('Trapped', 'pdf:info:Trapped', 'other', 'string', 'trapped')
 ]
 
@@ -80,24 +75,8 @@ export function createPdfMetadataPlan(document: PDFDocument): PdfMetadataPlanDat
   const mapping = new TaskRandomMapping()
   const replacementValues = new Map<string, string>()
   try {
-    const created = occurrences.filter(
-      (occurrence) => occurrence.action === 'randomize' && occurrence.dateRole === 'created'
-    )
-    const modified = occurrences.filter(
-      (occurrence) => occurrence.action === 'randomize' && occurrence.dateRole === 'modified'
-    )
-    if (created.length > 0 || modified.length > 0) {
-      const pair = mapping.timestampPair(
-        created[0]?.originalValue ?? '__missing-created__',
-        modified[0]?.originalValue ?? '__missing-modified__'
-      )
-      for (const occurrence of created)
-        replacementValues.set(occurrence.locator, pdfCompatibleTimestamp(pair.created))
-      for (const occurrence of modified)
-        replacementValues.set(occurrence.locator, pdfCompatibleTimestamp(pair.modified))
-    }
     for (const occurrence of occurrences) {
-      if (occurrence.action !== 'randomize' || replacementValues.has(occurrence.locator)) continue
+      if (occurrence.action !== 'randomize') continue
       replacementValues.set(occurrence.locator, randomizedValue(mapping, occurrence))
     }
     return {
@@ -129,41 +108,18 @@ export function sanitizePdfMetadata(
   replacementValues?: Readonly<Record<string, string>>
 ): void {
   const parsed = parseMetadata(document)
-  const handled = new Set<string>()
-  const created = parsed.occurrences.filter(
-    (occurrence) => occurrence.action === 'randomize' && occurrence.dateRole === 'created'
-  )
-  const modified = parsed.occurrences.filter(
-    (occurrence) => occurrence.action === 'randomize' && occurrence.dateRole === 'modified'
-  )
   if (replacementValues) {
     for (const occurrence of parsed.occurrences) {
       if (occurrence.action !== 'randomize') continue
       const value = replacementValues[occurrence.locator]
       if (value === undefined) throw new DocumentSafetyError('PLAN_EXPIRED')
       occurrence.setValue(value)
-      handled.add(occurrence.locator)
     }
-  } else if (created.length > 0 || modified.length > 0) {
-    const pair = mapping.timestampPair(
-      created[0]?.originalValue ?? '__missing-created__',
-      modified[0]?.originalValue ?? '__missing-modified__'
-    )
-    const createdValue = pdfCompatibleTimestamp(pair.created)
-    const modifiedValue = pdfCompatibleTimestamp(pair.modified)
-    for (const occurrence of created) {
-      occurrence.setValue(createdValue)
-      handled.add(occurrence.locator)
+  } else {
+    for (const occurrence of parsed.occurrences) {
+      if (occurrence.action !== 'randomize') continue
+      occurrence.setValue(randomizedValue(mapping, occurrence))
     }
-    for (const occurrence of modified) {
-      occurrence.setValue(modifiedValue)
-      handled.add(occurrence.locator)
-    }
-  }
-
-  for (const occurrence of parsed.occurrences) {
-    if (occurrence.action !== 'randomize' || handled.has(occurrence.locator)) continue
-    occurrence.setValue(randomizedValue(mapping, occurrence))
   }
   if (parsed.xmp) writePdfXmp(document, parsed.xmp)
 }
@@ -240,14 +196,15 @@ function parseInfo(document: PDFDocument): {
     if (!raw) continue
     const value = raw instanceof PDFRef ? document.context.lookup(raw) : raw
     const decoded = decodeInfoValue(value, spec)
-    const valid = decoded !== null && isValidValue(decoded, spec)
-    if (!valid) warnings.push(`${spec.field} 的值类型无效，已保留原值。`)
+    const preserve = spec.action === 'preserve'
+    const valid = !preserve && decoded !== null && isValidValue(decoded, spec)
+    if (!preserve && !valid) warnings.push(`${spec.field} 的值类型无效，已保留原值。`)
     occurrences.push({
       locator: `info:${spec.localName}`,
       field: spec.field,
       category: spec.category,
       valueType: spec.valueType,
-      action: valid ? 'randomize' : 'warn',
+      action: preserve ? 'preserve' : valid ? 'randomize' : 'warn',
       replacementKind: valid ? spec.replacementKind : null,
       originalValue: decoded ?? value?.toString() ?? '',
       dateRole: spec.dateRole ?? null,
@@ -324,10 +281,6 @@ function randomizedValue(
     default:
       throw new DocumentSafetyError('INTERNAL_ERROR')
   }
-}
-
-function pdfCompatibleTimestamp(value: string): string {
-  return new Date(Math.floor(Date.parse(value) / 1_000) * 1_000).toISOString()
 }
 
 function trailerIdValue(document: PDFDocument): string {
@@ -423,8 +376,25 @@ function infoSpec(
     field,
     category,
     valueType,
+    action: 'randomize',
     replacementKind,
     ...(dateRole ? { dateRole } : {})
+  }
+}
+
+function preserveInfoSpec(
+  localName: string,
+  field: string,
+  dateRole: Exclude<PdfDateRole, null>
+): PdfMetadataSpec {
+  return {
+    localName,
+    field,
+    category: 'timestamp',
+    valueType: 'timestamp',
+    action: 'preserve',
+    replacementKind: null,
+    dateRole
   }
 }
 

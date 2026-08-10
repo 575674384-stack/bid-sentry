@@ -87,7 +87,8 @@ function metadataCheck(
       passed = false
       continue
     }
-    if (sourceOccurrence.action === 'warn') {
+    if (sourceOccurrence.action !== 'randomize') {
+      // Preserved and warned occurrences must reach the output value-identical.
       if (outputOccurrence.originalValue !== sourceOccurrence.originalValue) passed = false
       continue
     }

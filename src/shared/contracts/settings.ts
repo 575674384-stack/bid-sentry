@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CompanyProfileSchema, OutputModeSchema, OutputSuffixSchema } from './appSettings'
 
 export const SETTINGS_SCHEMA_VERSION = 1 as const
 
@@ -11,8 +12,11 @@ export const AiSettingsSchema = z
     maxConcurrency: z.number().int().min(1).max(4),
     hasApiKey: z.boolean(),
     secretPersistence: z.enum(['encrypted', 'session']),
-    closeToTray: z.boolean().optional(),
-    checkUpdatesOnStartup: z.boolean().optional()
+    closeToTray: z.boolean(),
+    checkUpdatesOnStartup: z.boolean(),
+    outputMode: OutputModeSchema,
+    outputSuffix: OutputSuffixSchema,
+    companyProfile: CompanyProfileSchema
   })
   .strict()
 
@@ -23,8 +27,11 @@ export const AiSettingsUpdateSchema = z
     model: z.string().trim().min(1).max(200),
     timeoutMs: z.number().int().min(5_000).max(120_000),
     maxConcurrency: z.number().int().min(1).max(4),
-    closeToTray: z.boolean().optional(),
-    checkUpdatesOnStartup: z.boolean().optional(),
+    closeToTray: z.boolean(),
+    checkUpdatesOnStartup: z.boolean(),
+    outputMode: OutputModeSchema,
+    outputSuffix: OutputSuffixSchema,
+    companyProfile: CompanyProfileSchema,
     apiKey: z.string().trim().min(1).max(8_192).optional(),
     clearApiKey: z.boolean().default(false)
   })

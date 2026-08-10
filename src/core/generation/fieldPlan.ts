@@ -1,14 +1,99 @@
 import { createHash } from 'node:crypto'
 import {
   FillPlanSchema,
+  GenerationUserFormSchema,
   type FieldAction,
   type GenerationUserForm,
   type TemplateCandidate
 } from '../../shared/contracts'
 import type { DocumentSnapshot } from '../../shared/contracts'
 import { DocumentSafetyError } from '../documents/fileSafety'
-import { applyFieldAction } from './docx'
-import { extractFacts, type ReviewEntity } from '../review/entities'
+import { applyFieldAction, literalLabelPattern } from './docx'
+import { extractFacts, normalize, type ReviewEntity } from '../review/entities'
+
+const FORM_FIELD_LABELS: Record<KnownFormField, string> = {
+  bidderName: '投标人(?:名称)?|投标单位(?:名称)?|bidder\\s+name',
+  unifiedSocialCreditCode: '统一社会信用代码',
+  address: '地址',
+  legalRepresentative: '法定代表人',
+  authorizedRepresentative: '授权代表',
+  contact: '联系人',
+  phone: '电话|手机',
+  email: '邮箱|电子邮件',
+  projectName: '项目名称',
+  sectionName: '标段(?:名称)?',
+  compilationDate: '编制日期'
+}
+
+type KnownFormField = Exclude<keyof GenerationUserForm, 'extraFields'>
+
+const FIXED_VALUE_LABELS: Record<FixedValueKind, string> = {
+  duration: '工期|服务期|交货期|合同期限',
+  qualityStandard: '质量标准|质量要求|验收标准',
+  projectNumber: '项目编号|招标编号|标段编号|项目代码'
+}
+
+/**
+ * Labels that deterministic code already owns: the eleven well-known form
+ * fields plus the tender-fixed values filled from tender evidence. Local slot
+ * detection and AI suggestions must never re-offer them as dynamic fields.
+ */
+const KNOWN_TEMPLATE_LABEL_PATTERNS: readonly string[] = [
+  ...Object.values(FORM_FIELD_LABELS),
+  ...Object.values(FIXED_VALUE_LABELS)
+]
+
+const MAX_DETECTED_SLOT_LABEL_CHARS = 30
+
+/** True when a template slot label is already owned by a deterministic rule. */
+export function isKnownTemplateLabel(label: string): boolean {
+  const text = label.trim()
+  if (!text) return false
+  return KNOWN_TEMPLATE_LABEL_PATTERNS.some((pattern) =>
+    new RegExp(`^(?:${pattern})$`, 'iu').test(text)
+  )
+}
+
+/**
+ * Labels of template slots the local rules can see but no deterministic rule
+ * fills: explicit `标签：____` blanks and table label cells with an empty
+ * adjacent value cell. Well-known and tender-fixed labels are excluded.
+ */
+export function detectTemplateSlots(
+  document: DocumentSnapshot,
+  candidate: TemplateCandidate
+): string[] {
+  const selected = selectedNodes(document, candidate)
+  const fieldNodes = selected.filter((node) => node.kind !== 'table')
+  const labels: string[] = []
+  const seen = new Set<string>()
+  const push = (raw: string): void => {
+    const label = raw.trim()
+    if (!label || label.length > MAX_DETECTED_SLOT_LABEL_CHARS) return
+    const key = normalize(label)
+    if (!key || seen.has(key) || isKnownTemplateLabel(label)) return
+    seen.add(key)
+    labels.push(label)
+  }
+  const slotPattern = new RegExp(
+    `(?:^|[\\s|])([^\\s：:，,;；|_＿.．·…—–<>\\[\\]【】]{1,${MAX_DETECTED_SLOT_LABEL_CHARS}}?)\\s*[：:]\\s*${EMPTY_SLOT_PATTERN}(?=\\s|$|[，,;；])`,
+    'giu'
+  )
+  for (const node of fieldNodes) {
+    for (const match of node.text.matchAll(slotPattern)) {
+      push(match[1] ?? '')
+    }
+    if (
+      node.kind === 'cell' &&
+      node.text.trim().length > 0 &&
+      !/[：:]/u.test(node.text) &&
+      adjacentCellValueTarget(fieldNodes, node)
+    ) {
+      push(node.text)
+    }
+  }
+  return labels.slice(0, 30)
+}
 
 export function createFillPlan(
   document: DocumentSnapshot,
@@ -16,21 +101,24 @@ export function createFillPlan(
   userForm: GenerationUserForm,
   inputSha256 = '0'.repeat(64)
 ) {
+  // Normalize through the wire schema so the plan digest binds the exact
+  // canonical form (including extraFields) regardless of caller-side defaults.
+  const form = GenerationUserFormSchema.parse(userForm)
   const selected = selectedNodes(document, candidate)
   if (selected.length === 0) throw new DocumentSafetyError('INVALID_REQUEST')
   const actions: FieldAction[] = []
-  const formEntries: Array<[keyof GenerationUserForm, string]> = [
-    ['bidderName', userForm.bidderName],
-    ['unifiedSocialCreditCode', userForm.unifiedSocialCreditCode],
-    ['address', userForm.address],
-    ['legalRepresentative', userForm.legalRepresentative],
-    ['authorizedRepresentative', userForm.authorizedRepresentative],
-    ['contact', userForm.contact],
-    ['phone', userForm.phone],
-    ['email', userForm.email],
-    ['projectName', userForm.projectName],
-    ['sectionName', userForm.sectionName],
-    ['compilationDate', userForm.compilationDate]
+  const formEntries: Array<[KnownFormField, string]> = [
+    ['bidderName', form.bidderName],
+    ['unifiedSocialCreditCode', form.unifiedSocialCreditCode],
+    ['address', form.address],
+    ['legalRepresentative', form.legalRepresentative],
+    ['authorizedRepresentative', form.authorizedRepresentative],
+    ['contact', form.contact],
+    ['phone', form.phone],
+    ['email', form.email],
+    ['projectName', form.projectName],
+    ['sectionName', form.sectionName],
+    ['compilationDate', form.compilationDate]
   ]
   const unresolvedFields: Array<{ field: string; label: string }> = []
   // Tables expose both an aggregate `table-*` node and concrete `cell-*`
@@ -55,6 +143,28 @@ export function createFillPlan(
       action: 'replace',
       source: 'user-form',
       value
+    })
+  }
+  // Dynamic extra fields participate in slot matching by normalized label.
+  // They never block generation: an unmatched extra field is reported exactly
+  // like an unmatched optional known field.
+  for (const extra of form.extraFields) {
+    if (!extra.value) continue
+    const explicitTarget = findExtraFieldTarget(fieldNodes, extra.label)
+    if (!explicitTarget) {
+      unresolvedFields.push({ field: extra.key, label: extra.label })
+      continue
+    }
+    actions.push({
+      fieldId: createHash('sha256')
+        .update(`extra|${extra.key}|${explicitTarget.nodeId}|${extra.value}`)
+        .digest('hex')
+        .slice(0, 24),
+      label: extra.label,
+      targetNodeId: explicitTarget.nodeId,
+      action: 'replace',
+      source: 'user-form',
+      value: extra.value
     })
   }
   for (const fixed of fixedValues(document)) {
@@ -123,7 +233,7 @@ export function createFillPlan(
     planId: cryptoRandomUuid(),
     inputSha256,
     candidateId: candidate.candidateId,
-    userForm,
+    userForm: form,
     actions,
     unknownRequired,
     unknownFields: unknownFields.map((node) => ({
@@ -143,7 +253,7 @@ export function createFillPlan(
       JSON.stringify({
         inputSha256,
         candidateId: candidate.candidateId,
-        userForm,
+        userForm: form,
         actions,
         unknownRequired,
         warnings: planWithoutDigest.warnings
@@ -153,8 +263,10 @@ export function createFillPlan(
   return FillPlanSchema.parse({ ...planWithoutDigest, planDigest })
 }
 
+type FixedValueKind = 'duration' | 'qualityStandard' | 'projectNumber'
+
 interface FixedValue {
-  kind: 'duration' | 'qualityStandard' | 'projectNumber'
+  kind: FixedValueKind
   labelPattern: string
   entity: ReviewEntity
 }
@@ -162,22 +274,10 @@ interface FixedValue {
 function fixedValues(document: DocumentSnapshot): FixedValue[] {
   const facts = extractFacts(document)
   return [
-    ...facts.durations.map((entity) => ({
-      kind: 'duration' as const,
-      labelPattern: '工期|服务期|交货期|合同期限',
-      entity
-    })),
-    ...facts.qualityTerms.map((entity) => ({
-      kind: 'qualityStandard' as const,
-      labelPattern: '质量标准|质量要求|验收标准',
-      entity
-    })),
-    ...facts.projectNumbers.map((entity) => ({
-      kind: 'projectNumber' as const,
-      labelPattern: '项目编号|招标编号|标段编号|项目代码',
-      entity
-    }))
-  ]
+    ...facts.durations.map((entity) => ({ kind: 'duration' as const, entity })),
+    ...facts.qualityTerms.map((entity) => ({ kind: 'qualityStandard' as const, entity })),
+    ...facts.projectNumbers.map((entity) => ({ kind: 'projectNumber' as const, entity }))
+  ].map((fixed) => ({ ...fixed, labelPattern: FIXED_VALUE_LABELS[fixed.kind] }))
 }
 
 function selectedNodes(document: DocumentSnapshot, candidate: TemplateCandidate) {
@@ -187,29 +287,13 @@ function selectedNodes(document: DocumentSnapshot, candidate: TemplateCandidate)
   return document.nodes.slice(start, end + 1)
 }
 
-function fieldLabel(field: keyof GenerationUserForm): string {
-  return (
-    (
-      {
-        bidderName: '投标人(?:名称)?|投标单位(?:名称)?|bidder\\s+name',
-        unifiedSocialCreditCode: '统一社会信用代码',
-        address: '地址',
-        legalRepresentative: '法定代表人',
-        authorizedRepresentative: '授权代表',
-        contact: '联系人',
-        phone: '电话|手机',
-        email: '邮箱|电子邮件',
-        projectName: '项目名称',
-        sectionName: '标段',
-        compilationDate: '编制日期'
-      } as Record<keyof GenerationUserForm, string>
-    )[field] ?? field
-  )
+function fieldLabel(field: KnownFormField): string {
+  return FORM_FIELD_LABELS[field] ?? field
 }
 
 function hasExplicitFormSlot(
   node: DocumentSnapshot['nodes'][number],
-  field: keyof GenerationUserForm
+  field: KnownFormField
 ): boolean {
   const text = node.text.trim()
   if (!text) return false
@@ -219,6 +303,32 @@ function hasExplicitFormSlot(
     `(?:^|[\\s|])(?:${label})\\s*[：:]\\s*${EMPTY_SLOT_PATTERN}(?=\\s|$|[，,;；])`,
     'iu'
   ).test(text)
+}
+
+/**
+ * Slot lookup for a dynamic extra field: either the whole node is the label
+ * (normalized: trim, width- and whitespace-insensitive) or the node contains
+ * `标签：____`. Matching mirrors the known-field rules so the OOXML writer can
+ * replace the value by label afterwards.
+ */
+function findExtraFieldTarget(
+  nodes: readonly DocumentSnapshot['nodes'][number][],
+  label: string
+): DocumentSnapshot['nodes'][number] | undefined {
+  const pattern = literalLabelPattern(label)
+  const normalizedLabel = normalize(label)
+  if (!pattern || !normalizedLabel) return undefined
+  const explicit = nodes.find((node) => {
+    const text = node.text.trim()
+    if (!text) return false
+    if (normalize(text) === normalizedLabel) return true
+    return new RegExp(
+      `(?:^|[\\s|])(?:${pattern})\\s*[：:]\\s*${EMPTY_SLOT_PATTERN}(?=\\s|$|[，,;；])`,
+      'iu'
+    ).test(text)
+  })
+  if (!explicit) return undefined
+  return adjacentCellValueTarget(nodes, explicit) ?? explicit
 }
 
 const EMPTY_SLOT_PATTERN =

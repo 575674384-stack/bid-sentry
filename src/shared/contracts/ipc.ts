@@ -8,7 +8,11 @@ import {
 import { AiConnectionTestResultSchema, AiSettingsSchema, AiSettingsUpdateSchema } from './settings'
 import { UpdateActionResultSchema, UpdateStatusSchema } from './updates'
 import { ReviewRequestSchema, ReviewResultSchema } from './review'
-import { GenerationPreviewSchema, GenerationResultSchema } from './generation'
+import {
+  GenerationAnalysisSchema,
+  GenerationPlanSchema,
+  GenerationResultSchema
+} from './generation'
 
 export const MAX_IPC_REQUEST_BYTES = 64 * 1024
 export const MAX_IPC_RESPONSE_BYTES = 4 * 1024 * 1024
@@ -19,7 +23,6 @@ export const IPC_CHANNELS = Object.freeze({
   settingsSave: 'settings:save',
   settingsTestAi: 'settings:test-ai',
   filesSelectInputs: 'files:select-inputs',
-  filesSelectOutput: 'files:select-output',
   sanitizePreview: 'sanitize:preview',
   sanitizeExecute: 'sanitize:execute',
   taskCancel: 'task:cancel',
@@ -34,7 +37,8 @@ export const IPC_CHANNELS = Object.freeze({
   reviewStart: 'review:start',
   reviewRun: 'review:run',
   reviewCancel: 'review:cancel',
-  generationPreview: 'generation:preview',
+  generationAnalyze: 'generation:analyze',
+  generationPlan: 'generation:plan',
   generationRun: 'generation:run',
   generationCancel: 'generation:cancel'
 } as const)
@@ -54,14 +58,6 @@ export const SelectedInputFilesSchema = z
   .object({
     schemaVersion: z.literal(1),
     files: z.array(SelectedInputFileSchema).max(20)
-  })
-  .strict()
-
-export const SelectedOutputDirectorySchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    outputDirectoryId: z.string().uuid(),
-    displayName: z.string().trim().min(1).max(255)
   })
   .strict()
 
@@ -95,8 +91,6 @@ export const UpdatesOpenReleaseRequestSchema = EmptyPayloadSchema
 export const ReviewStartRequestSchema = EmptyPayloadSchema
 export const ReviewRunRequestSchema = ReviewRequestSchema
 export const ReviewCancelRequestSchema = TaskCancelRequestSchema
-export const GenerationCancelRequestSchema = TaskCancelRequestSchema
-
 export const TaskCancellationResultSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -123,7 +117,6 @@ export const IPC_RESPONSE_DATA_SCHEMAS = Object.freeze({
   settingsSave: AiSettingsSchema,
   settingsTestAi: AiConnectionTestResultSchema,
   filesSelectInputs: SelectedInputFilesSchema,
-  filesSelectOutput: SelectedOutputDirectorySchema.nullable(),
   sanitizePreview: SanitizationPreviewSchema,
   sanitizeExecute: SanitizationTaskResultSchema,
   taskCancel: TaskCancellationResultSchema,
@@ -137,7 +130,8 @@ export const IPC_RESPONSE_DATA_SCHEMAS = Object.freeze({
   reviewStart: TaskStartResultSchema,
   reviewRun: ReviewResultSchema,
   reviewCancel: TaskCancellationResultSchema,
-  generationPreview: GenerationPreviewSchema,
+  generationAnalyze: GenerationAnalysisSchema,
+  generationPlan: GenerationPlanSchema,
   generationRun: GenerationResultSchema,
   generationCancel: TaskCancellationResultSchema
 })
@@ -177,5 +171,4 @@ export type IpcRequestEnvelope = z.infer<typeof IpcRequestEnvelopeSchema>
 export type IpcResponseEnvelope = z.infer<typeof IpcResponseEnvelopeSchema>
 export type SelectedInputFile = z.infer<typeof SelectedInputFileSchema>
 export type SelectedInputFiles = z.infer<typeof SelectedInputFilesSchema>
-export type SelectedOutputDirectory = z.infer<typeof SelectedOutputDirectorySchema>
 export type TaskStartResult = z.infer<typeof TaskStartResultSchema>

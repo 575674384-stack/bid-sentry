@@ -112,6 +112,7 @@ async function startApplication(): Promise<void> {
     forgetWorkspace: (workspace) => workspaceJournal.remove(workspace)
   })
   const generationTaskManager = new GenerationTaskManager({
+    settingsService,
     recordWorkspace: (workspace) => workspaceJournal.add(workspace),
     forgetWorkspace: (workspace) => workspaceJournal.remove(workspace)
   })
@@ -151,19 +152,11 @@ async function startApplication(): Promise<void> {
     async selectInputPaths() {
       if (e2eHarness) return e2eHarness.inputPaths
       const result = await dialog.showOpenDialog({
-        title: '选择需要清洗的 DOCX/PDF 文件',
+        title: '选择 DOCX/PDF 文件',
         properties: ['openFile', 'multiSelections'],
         filters: [{ name: '支持的文档', extensions: ['docx', 'pdf'] }]
       })
       return result.canceled ? null : result.filePaths
-    },
-    async selectOutputDirectory() {
-      if (e2eHarness) return e2eHarness.outputDirectory
-      const result = await dialog.showOpenDialog({
-        title: '选择输出目录',
-        properties: ['openDirectory', 'createDirectory']
-      })
-      return result.canceled ? null : (result.filePaths[0] ?? null)
     },
     showResultInFolder(absolutePath) {
       if (e2eHarness) {

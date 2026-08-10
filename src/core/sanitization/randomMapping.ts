@@ -94,32 +94,6 @@ export class TaskRandomMapping {
     return this.mapString('timestamp', originalValue, () => this.randomPastTimestamp())
   }
 
-  timestampPair(
-    createdOriginalValue: string,
-    modifiedOriginalValue: string
-  ): { created: string; modified: string } {
-    const createdKey = this.keyFor('created-timestamp', createdOriginalValue)
-    const modifiedKey = this.keyFor('modified-timestamp', modifiedOriginalValue)
-    const existingCreated = this.#values.get(createdKey)
-    const existingModified = this.#values.get(modifiedKey)
-
-    if (typeof existingCreated === 'string' && typeof existingModified === 'string') {
-      return { created: existingCreated, modified: existingModified }
-    }
-
-    const now = Math.floor(this.now() / 1_000) * 1_000
-    const lowerBound = now - ONE_YEAR_MS
-    const { created, modified } = this.createDistinctTimestampPair(
-      createdOriginalValue,
-      modifiedOriginalValue,
-      lowerBound,
-      now
-    )
-    this.#values.set(createdKey, created)
-    this.#values.set(modifiedKey, modified)
-    return { created, modified }
-  }
-
   destroy(): void {
     this.#values.clear()
     this.#usedStringValues.clear()
@@ -142,24 +116,6 @@ export class TaskRandomMapping {
       return generated
     }
     throw new Error('无法生成唯一随机映射。')
-  }
-
-  private createDistinctTimestampPair(
-    createdOriginalValue: string,
-    modifiedOriginalValue: string,
-    lowerBound: number,
-    now: number
-  ): { created: string; modified: string } {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const first = randomInt(lowerBound, now + 1)
-      const second = randomInt(lowerBound, now + 1)
-      const created = new Date(Math.min(first, second)).toISOString()
-      const modified = new Date(Math.max(first, second)).toISOString()
-      if (created !== createdOriginalValue && modified !== modifiedOriginalValue) {
-        return { created, modified }
-      }
-    }
-    throw new Error('无法生成有序随机时间。')
   }
 
   private randomPastTimestamp(): string {

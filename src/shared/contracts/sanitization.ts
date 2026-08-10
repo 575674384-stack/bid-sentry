@@ -104,7 +104,6 @@ export const SanitizationCommandSchema = z
     schemaVersion: z.literal(1),
     taskId: z.string().uuid(),
     planDigest: z.string().regex(/^[a-f0-9]{64}$/u),
-    outputDirectoryId: z.string().uuid(),
     acknowledged: z.literal(true)
   })
   .strict()

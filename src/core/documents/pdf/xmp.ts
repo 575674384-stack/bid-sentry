@@ -22,33 +22,11 @@ const XMP_SPECS: readonly PdfMetadataSpec[] = [
   spec(PDF_NS, 'Producer', 'pdf:xmp:Producer', 'application', 'string', 'application'),
   spec(PDF_NS, 'Trapped', 'pdf:xmp:Trapped', 'other', 'string', 'trapped'),
   spec(XMP_NS, 'CreatorTool', 'pdf:xmp:CreatorTool', 'application', 'string', 'application'),
-  spec(
-    XMP_NS,
-    'CreateDate',
-    'pdf:xmp:CreateDate',
-    'timestamp',
-    'timestamp',
-    'timestamp',
-    'created'
-  ),
-  spec(
-    XMP_NS,
-    'ModifyDate',
-    'pdf:xmp:ModifyDate',
-    'timestamp',
-    'timestamp',
-    'timestamp',
-    'modified'
-  ),
-  spec(
-    XMP_NS,
-    'MetadataDate',
-    'pdf:xmp:MetadataDate',
-    'timestamp',
-    'timestamp',
-    'timestamp',
-    'modified'
-  ),
+  // Document timestamps are factual history, not identity: they are preserved
+  // byte-identical instead of randomized.
+  preserveSpec(XMP_NS, 'CreateDate', 'pdf:xmp:CreateDate', 'created'),
+  preserveSpec(XMP_NS, 'ModifyDate', 'pdf:xmp:ModifyDate', 'modified'),
+  preserveSpec(XMP_NS, 'MetadataDate', 'pdf:xmp:MetadataDate', 'modified'),
   spec(XMP_MM_NS, 'DocumentID', 'pdf:xmp:DocumentID', 'document-identifier', 'uuid', 'uuid'),
   spec(XMP_MM_NS, 'InstanceID', 'pdf:xmp:InstanceID', 'document-identifier', 'uuid', 'uuid')
 ]
@@ -106,14 +84,15 @@ export function parsePdfXmp(document: PDFDocument): ParsedPdfXmp | null {
   ): void {
     const ordinal = (counters.get(fieldSpec.field) ?? 0) + 1
     counters.set(fieldSpec.field, ordinal)
-    const valid = !unsupportedStructure && isValidValue(originalValue, fieldSpec)
-    if (!valid) warnings.push(`${fieldSpec.field} 的值类型或结构无效，已保留原值。`)
+    const preserve = fieldSpec.action === 'preserve'
+    const valid = !preserve && !unsupportedStructure && isValidValue(originalValue, fieldSpec)
+    if (!preserve && !valid) warnings.push(`${fieldSpec.field} 的值类型或结构无效，已保留原值。`)
     occurrences.push({
       locator: `xmp:${fieldSpec.field}:${ordinal}`,
       field: fieldSpec.field,
       category: fieldSpec.category,
       valueType: fieldSpec.valueType,
-      action: valid ? 'randomize' : 'warn',
+      action: preserve ? 'preserve' : valid ? 'randomize' : 'warn',
       replacementKind: valid ? fieldSpec.replacementKind : null,
       originalValue,
       dateRole: fieldSpec.dateRole ?? null,
@@ -200,7 +179,7 @@ function spec(
   field: string,
   category: PdfMetadataSpec['category'],
   valueType: PdfMetadataSpec['valueType'],
-  replacementKind: PdfMetadataSpec['replacementKind'],
+  replacementKind: NonNullable<PdfMetadataSpec['replacementKind']>,
   dateRole?: NonNullable<PdfMetadataSpec['dateRole']>
 ): PdfMetadataSpec {
   return {
@@ -209,7 +188,26 @@ function spec(
     field,
     category,
     valueType,
+    action: 'randomize',
     replacementKind,
     ...(dateRole ? { dateRole } : {})
+  }
+}
+
+function preserveSpec(
+  namespace: string,
+  localName: string,
+  field: string,
+  dateRole: NonNullable<PdfMetadataSpec['dateRole']>
+): PdfMetadataSpec {
+  return {
+    namespace,
+    localName,
+    field,
+    category: 'timestamp',
+    valueType: 'timestamp',
+    action: 'preserve',
+    replacementKind: null,
+    dateRole
   }
 }

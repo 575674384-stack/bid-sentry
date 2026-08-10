@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -16,9 +16,8 @@ import {
   IPC_CHANNELS,
   type IpcResponseEnvelope,
   type ReviewResult,
-  type GenerationPreview,
-  type ReviewRequest,
-  type GenerationPreviewRequest
+  type GenerationAnalysis,
+  type ReviewRequest
 } from '../../src/shared/contracts'
 import type { ReviewTaskManager } from '../../src/main/tasks/reviewTaskManager'
 import type { GenerationTaskManager } from '../../src/main/tasks/generationTaskManager'
@@ -49,8 +48,6 @@ describe('review and generation IPC ownership', () => {
     const harness = await createIpcHarness(fixture, { reviewManager })
     const inputs = await harness.ipc.invoke(IPC_CHANNELS.filesSelectInputs, 1, {})
     const files = successData<{ files: Array<{ inputId: string }> }>(inputs).files
-    const output = await harness.ipc.invoke(IPC_CHANNELS.filesSelectOutput, 1, {})
-    const outputDirectoryId = successData<{ outputDirectoryId: string }>(output).outputDirectoryId
     const started = await harness.ipc.invoke(IPC_CHANNELS.reviewStart, 1, {})
     const reviewTaskId = successData<{ taskId: string }>(started).taskId
     const request: ReviewRequest = {
@@ -58,7 +55,6 @@ describe('review and generation IPC ownership', () => {
       taskId: reviewTaskId,
       tenderInputId: files[0]!.inputId,
       bidInputId: files[1]!.inputId,
-      outputDirectoryId,
       bidderName: '示例投标单位',
       aiConfirmed: false
     }
@@ -81,11 +77,11 @@ describe('review and generation IPC ownership', () => {
     harness.dispose()
   })
 
-  it('binds generation run and cancel to the renderer that created the preview', async () => {
+  it('binds generation run and cancel to the renderer that created the analysis', async () => {
     const fixture = await createFixture(true)
     let resolveRun: (() => void) | undefined
     const input = await createInputSnapshot(fixture.inputPath)
-    const preview: GenerationPreview = {
+    const analysis: GenerationAnalysis = {
       schemaVersion: 1,
       taskId: '723e4567-e89b-42d3-a456-426614174000',
       inputName: 'tender.docx',
@@ -102,23 +98,28 @@ describe('review and generation IPC ownership', () => {
           reasons: ['synthetic']
         }
       ],
-      plans: [
-        {
-          candidateId: 'a'.repeat(24),
-          planId: '823e4567-e89b-42d3-a456-426614174000',
-          planDigest: 'b'.repeat(64),
-          inputSha256: input.sha256,
-          actions: [],
-          unknownRequired: 0,
-          unknownFields: [],
-          unresolvedFields: [],
-          warnings: []
-        }
-      ]
+      extraction: {
+        aiUsed: false,
+        qualificationSummary: [],
+        suggestedFields: [],
+        notices: []
+      }
+    }
+    const plan = {
+      candidateId: 'a'.repeat(24),
+      planId: '823e4567-e89b-42d3-a456-426614174000',
+      planDigest: 'b'.repeat(64),
+      inputSha256: input.sha256,
+      actions: [],
+      unknownRequired: 0,
+      unknownFields: [],
+      unresolvedFields: [],
+      warnings: []
     }
     const generationManager = {
-      preview: vi.fn(async (_request, _input, taskId) => ({ ...preview, taskId })),
-      hasPreview: vi.fn(() => false),
+      analyze: vi.fn(async (_request, _input, taskId) => ({ ...analysis, taskId })),
+      plan: vi.fn(async () => plan),
+      hasTask: vi.fn(() => false),
       run: vi.fn(
         () =>
           new Promise<void>((resolve) => {
@@ -130,11 +131,17 @@ describe('review and generation IPC ownership', () => {
     const harness = await createIpcHarness(fixture, { generationManager })
     const inputs = await harness.ipc.invoke(IPC_CHANNELS.filesSelectInputs, 1, {})
     const inputId = successData<{ files: Array<{ inputId: string }> }>(inputs).files[0]!.inputId
-    const output = await harness.ipc.invoke(IPC_CHANNELS.filesSelectOutput, 1, {})
-    const outputDirectoryId = successData<{ outputDirectoryId: string }>(output).outputDirectoryId
-    const previewRequest: GenerationPreviewRequest = {
-      schemaVersion: 1,
-      inputId,
+    const analyzeRequest = {
+      schemaVersion: 1 as const,
+      inputId
+    }
+    const analysisResult = successData<{ taskId: string }>(
+      await harness.ipc.invoke(IPC_CHANNELS.generationAnalyze, 1, analyzeRequest)
+    )
+    const planRequest = {
+      schemaVersion: 1 as const,
+      analysisTaskId: analysisResult.taskId,
+      candidateId: 'a'.repeat(24),
       userForm: {
         bidderName: '示例投标单位',
         unifiedSocialCreditCode: '',
@@ -146,31 +153,31 @@ describe('review and generation IPC ownership', () => {
         email: '',
         projectName: '',
         sectionName: '',
-        compilationDate: ''
+        compilationDate: '',
+        extraFields: []
       }
     }
-    const generatedPreview = successData<{ taskId: string }>(
-      await harness.ipc.invoke(IPC_CHANNELS.generationPreview, 1, previewRequest)
+    const generatedPlan = successData<{ planId: string }>(
+      await harness.ipc.invoke(IPC_CHANNELS.generationPlan, 1, planRequest)
     )
     const runRequest = {
       schemaVersion: 1 as const,
       inputId,
-      outputDirectoryId,
-      previewTaskId: generatedPreview.taskId,
+      analysisTaskId: analysisResult.taskId,
       candidateId: 'a'.repeat(24),
-      planId: '823e4567-e89b-42d3-a456-426614174000',
+      planId: generatedPlan.planId,
       planDigest: 'b'.repeat(64),
       confirmed: true as const
     }
     const running = harness.ipc.invoke(IPC_CHANNELS.generationRun, 1, runRequest)
     await vi.waitFor(() => expect(generationManager.run).toHaveBeenCalled())
     await expect(
-      harness.ipc.invoke(IPC_CHANNELS.generationCancel, 2, { taskId: generatedPreview.taskId })
+      harness.ipc.invoke(IPC_CHANNELS.generationCancel, 2, { taskId: analysisResult.taskId })
     ).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } })
     await harness.ipc.invoke(IPC_CHANNELS.generationCancel, 1, {
-      taskId: generatedPreview.taskId
+      taskId: analysisResult.taskId
     })
-    expect(generationManager.cancel).toHaveBeenCalledWith(generatedPreview.taskId)
+    expect(generationManager.cancel).toHaveBeenCalledWith(analysisResult.taskId)
     resolveRun?.()
     await running
     harness.dispose()
@@ -180,7 +187,6 @@ describe('review and generation IPC ownership', () => {
 interface Fixture {
   directory: string
   inputPath: string
-  outputDirectory: string
 }
 
 async function createFixture(qualificationTemplate = false): Promise<Fixture> {
@@ -188,13 +194,11 @@ async function createFixture(qualificationTemplate = false): Promise<Fixture> {
   directories.push(directory)
   const inputPath = join(directory, 'tender.docx')
   const secondInputPath = join(directory, 'bid.docx')
-  const outputDirectory = join(directory, 'output')
-  await mkdir(outputDirectory)
   await writeDocxFixture(inputPath, {
     ...(qualificationTemplate ? { qualificationTemplate: true } : {})
   })
   await writeDocxFixture(secondInputPath)
-  return { directory, inputPath, outputDirectory }
+  return { directory, inputPath }
 }
 
 async function createIpcHarness(
@@ -218,7 +222,6 @@ async function createIpcHarness(
     ...(options.reviewManager ? { reviewTaskManager: options.reviewManager } : {}),
     ...(options.generationManager ? { generationTaskManager: options.generationManager } : {}),
     selectInputPaths: async () => [fixture.inputPath, join(fixture.directory, 'bid.docx')],
-    selectOutputDirectory: async () => fixture.outputDirectory,
     showResultInFolder: () => undefined
   })
   return { ipc, dispose }

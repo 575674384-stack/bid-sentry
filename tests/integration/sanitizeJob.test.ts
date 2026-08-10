@@ -54,30 +54,16 @@ describe('SanitizationJob', () => {
     const job = new SanitizationJob()
 
     await expect(
-      job.execute(
-        {
-          taskId: request.taskId,
-          planDigest: 'a'.repeat(64),
-          outputDirectory: directory,
-          appVersion: '0.1.0'
-        },
-        new AbortController().signal
-      )
+      job.execute(executeRequest(request.taskId, 'a'.repeat(64)), new AbortController().signal)
     ).rejects.toMatchObject({ appError: { code: 'TASK_NOT_FOUND' } })
 
     await job.preview(request, new AbortController().signal)
     await expect(
-      job.execute(
-        {
-          taskId: request.taskId,
-          planDigest: 'b'.repeat(64),
-          outputDirectory: directory,
-          appVersion: '0.1.0'
-        },
-        new AbortController().signal
-      )
+      job.execute(executeRequest(request.taskId, 'b'.repeat(64)), new AbortController().signal)
     ).rejects.toMatchObject({ appError: { code: 'PLAN_EXPIRED' } })
-    await expect(access(buildSanitizedOutputPath(inputPath, directory))).rejects.toMatchObject({
+    await expect(
+      access(buildSanitizedOutputPath(inputPath, 'suffix', '_已清洗'))
+    ).rejects.toMatchObject({
       code: 'ENOENT'
     })
   })
@@ -96,12 +82,7 @@ describe('SanitizationJob', () => {
     nowMs += 1_001
     await expect(
       expiringJob.execute(
-        {
-          taskId: firstRequest.taskId,
-          planDigest: expiredPreview.planDigest,
-          outputDirectory: directory,
-          appVersion: '0.1.0'
-        },
+        executeRequest(firstRequest.taskId, expiredPreview.planDigest),
         new AbortController().signal
       )
     ).rejects.toMatchObject({ appError: { code: 'PLAN_EXPIRED' } })
@@ -114,40 +95,29 @@ describe('SanitizationJob', () => {
     await writeFile(changedPath, Buffer.from('changed after preview'))
     await expect(
       changedJob.execute(
-        {
-          taskId: changedRequest.taskId,
-          planDigest: preview.planDigest,
-          outputDirectory: directory,
-          appVersion: '0.1.0'
-        },
+        executeRequest(changedRequest.taskId, preview.planDigest),
         new AbortController().signal
       )
     ).rejects.toMatchObject({ appError: { code: 'FILE_CHANGED' } })
     expect(await temporaryWorkspaceNames(directory)).toEqual([])
   })
 
-  it('does not overwrite an existing output or leave a temporary workspace', async () => {
+  it('picks a collision-free suffix output instead of overwriting an existing file', async () => {
     const directory = await createTemporaryDirectory()
     const inputPath = join(directory, 'conflict.pdf')
     await writePdfFixture(inputPath)
-    const outputPath = buildSanitizedOutputPath(inputPath, directory)
-    await writeFile(outputPath, 'owned by user')
+    const firstOutput = buildSanitizedOutputPath(inputPath, 'suffix', '_已清洗')
+    await writeFile(firstOutput, 'owned by user')
     const request = await previewRequest(inputPath)
     const job = new SanitizationJob()
     const preview = await job.preview(request, new AbortController().signal)
 
-    await expect(
-      job.execute(
-        {
-          taskId: request.taskId,
-          planDigest: preview.planDigest,
-          outputDirectory: directory,
-          appVersion: '0.1.0'
-        },
-        new AbortController().signal
-      )
-    ).rejects.toMatchObject({ appError: { code: 'OUTPUT_EXISTS' } })
-    expect(await readFile(outputPath, 'utf8')).toBe('owned by user')
+    const result = await job.execute(
+      executeRequest(request.taskId, preview.planDigest),
+      new AbortController().signal
+    )
+    expect(result.outputPaths[0]).toBe(join(directory, 'conflict_已清洗 (2).pdf'))
+    expect(await readFile(firstOutput, 'utf8')).toBe('owned by user')
     expect(await temporaryWorkspaceNames(directory)).toEqual([])
   })
 
@@ -165,12 +135,7 @@ describe('SanitizationJob', () => {
     const preview = await job.preview(request, new AbortController().signal)
 
     const result = await job.execute(
-      {
-        taskId: request.taskId,
-        planDigest: preview.planDigest,
-        outputDirectory: directory,
-        appVersion: '0.1.0'
-      },
+      executeRequest(request.taskId, preview.planDigest),
       new AbortController().signal,
       (event) => states.push(event.state)
     )
@@ -188,7 +153,7 @@ describe('SanitizationJob', () => {
     const htmlReport = await readFile(result.htmlReportPath, 'utf8')
     expect(jsonReport).toEqual(result.report)
     expect(htmlReport).toContain(result.taskId)
-    expect(htmlReport).toContain('qualification_sanitized.docx')
+    expect(htmlReport).toContain('qualification_已清洗.docx')
     expect(htmlReport).not.toContain(DOCX_FIXTURE_VALUES.person)
     expect(await temporaryWorkspaceNames(directory)).toEqual([])
   })
@@ -202,15 +167,7 @@ describe('SanitizationJob', () => {
     const preview = await job.preview(request, new AbortController().signal)
 
     await expect(
-      job.execute(
-        {
-          taskId: request.taskId,
-          planDigest: preview.planDigest,
-          outputDirectory: directory,
-          appVersion: '0.1.0'
-        },
-        new AbortController().signal
-      )
+      job.execute(executeRequest(request.taskId, preview.planDigest), new AbortController().signal)
     ).rejects.toMatchObject({ appError: { code: 'INTERNAL_ERROR' } })
     expect(await outputAndReportNames(directory)).toEqual([])
     expect(await temporaryWorkspaceNames(directory)).toEqual([])
@@ -225,15 +182,7 @@ describe('SanitizationJob', () => {
     const preview = await job.preview(request, new AbortController().signal)
 
     await expect(
-      job.execute(
-        {
-          taskId: request.taskId,
-          planDigest: preview.planDigest,
-          outputDirectory: directory,
-          appVersion: '0.1.0'
-        },
-        new AbortController().signal
-      )
+      job.execute(executeRequest(request.taskId, preview.planDigest), new AbortController().signal)
     ).rejects.toBeInstanceOf(Error)
     expect(await outputAndReportNames(directory)).toEqual([])
     expect(await temporaryWorkspaceNames(directory)).toEqual([])
@@ -248,15 +197,7 @@ describe('SanitizationJob', () => {
     const preview = await job.preview(request, new AbortController().signal)
 
     await expect(
-      job.execute(
-        {
-          taskId: request.taskId,
-          planDigest: preview.planDigest,
-          outputDirectory: directory,
-          appVersion: '0.1.0'
-        },
-        new AbortController().signal
-      )
+      job.execute(executeRequest(request.taskId, preview.planDigest), new AbortController().signal)
     ).rejects.toBeInstanceOf(Error)
     expect(await outputAndReportNames(directory)).toEqual([])
     expect(await temporaryWorkspaceNames(directory)).toEqual([])
@@ -271,12 +212,7 @@ describe('SanitizationJob', () => {
     const preview = await job.preview(request, new AbortController().signal)
     const controller = new AbortController()
     const execution = job.execute(
-      {
-        taskId: request.taskId,
-        planDigest: preview.planDigest,
-        outputDirectory: directory,
-        appVersion: '0.1.0'
-      },
+      executeRequest(request.taskId, preview.planDigest),
       controller.signal
     )
     controller.abort()
@@ -304,6 +240,19 @@ async function previewRequest(...paths: string[]): Promise<WorkerPreviewRequest>
         snapshot: await createInputSnapshot(filePath)
       }))
     )
+  }
+}
+
+/** New-style execute request: outputs land next to each input. */
+function executeRequest(taskId: string, planDigest: string) {
+  return {
+    schemaVersion: 1 as const,
+    type: 'execute' as const,
+    taskId,
+    planDigest,
+    outputMode: 'suffix' as const,
+    outputSuffix: '_已清洗',
+    appVersion: '0.1.0'
   }
 }
 
@@ -392,6 +341,6 @@ async function temporaryWorkspaceNames(directory: string): Promise<string[]> {
 
 async function outputAndReportNames(directory: string): Promise<string[]> {
   return (await readdir(directory)).filter(
-    (name) => name.includes('_sanitized.') || name.startsWith('bid-sentry-report-')
+    (name) => /_已清洗\./.test(name) || name.startsWith('bid-sentry-report-')
   )
 }

@@ -13,8 +13,9 @@ import {
   type SanitizationCommand,
   type TaskProgress,
   type ReviewRequest,
-  type GenerationPreviewRequest,
-  type GenerationRequest
+  type GenerationAnalyzeRequest,
+  type GenerationPlanRequest,
+  type GenerationRunRequest
 } from '../shared/contracts'
 
 export interface BidSentryApi {
@@ -23,7 +24,6 @@ export interface BidSentryApi {
   saveSettings(update: AiSettingsUpdate): Promise<IpcResponseEnvelope>
   testAiConnection(update: AiSettingsUpdate): Promise<IpcResponseEnvelope>
   selectInputFiles(): Promise<IpcResponseEnvelope>
-  selectOutputDirectory(): Promise<IpcResponseEnvelope>
   previewSanitization(inputIds: readonly string[]): Promise<IpcResponseEnvelope>
   executeSanitization(command: SanitizationCommand): Promise<IpcResponseEnvelope>
   cancelTask(taskId: string): Promise<IpcResponseEnvelope>
@@ -38,8 +38,9 @@ export interface BidSentryApi {
   startReview(): Promise<IpcResponseEnvelope>
   runReview(request: ReviewRequest): Promise<IpcResponseEnvelope>
   cancelReview(taskId: string): Promise<IpcResponseEnvelope>
-  previewGeneration(request: GenerationPreviewRequest): Promise<IpcResponseEnvelope>
-  runGeneration(request: GenerationRequest): Promise<IpcResponseEnvelope>
+  analyzeGeneration(request: GenerationAnalyzeRequest): Promise<IpcResponseEnvelope>
+  planGeneration(request: GenerationPlanRequest): Promise<IpcResponseEnvelope>
+  runGeneration(request: GenerationRunRequest): Promise<IpcResponseEnvelope>
   cancelGeneration(taskId: string): Promise<IpcResponseEnvelope>
 }
 
@@ -52,8 +53,6 @@ const api: BidSentryApi = {
     invoke(IPC_CHANNELS.settingsTestAi, { settings }, IPC_RESPONSE_DATA_SCHEMAS.settingsTestAi),
   selectInputFiles: () =>
     invoke(IPC_CHANNELS.filesSelectInputs, {}, IPC_RESPONSE_DATA_SCHEMAS.filesSelectInputs),
-  selectOutputDirectory: () =>
-    invoke(IPC_CHANNELS.filesSelectOutput, {}, IPC_RESPONSE_DATA_SCHEMAS.filesSelectOutput),
   previewSanitization: (inputIds) =>
     invoke(
       IPC_CHANNELS.sanitizePreview,
@@ -104,8 +103,10 @@ const api: BidSentryApi = {
     invoke(IPC_CHANNELS.reviewRun, request, IPC_RESPONSE_DATA_SCHEMAS.reviewRun),
   cancelReview: (taskId) =>
     invoke(IPC_CHANNELS.reviewCancel, { taskId }, IPC_RESPONSE_DATA_SCHEMAS.reviewCancel),
-  previewGeneration: (request) =>
-    invoke(IPC_CHANNELS.generationPreview, request, IPC_RESPONSE_DATA_SCHEMAS.generationPreview),
+  analyzeGeneration: (request) =>
+    invoke(IPC_CHANNELS.generationAnalyze, request, IPC_RESPONSE_DATA_SCHEMAS.generationAnalyze),
+  planGeneration: (request) =>
+    invoke(IPC_CHANNELS.generationPlan, request, IPC_RESPONSE_DATA_SCHEMAS.generationPlan),
   runGeneration: (request) =>
     invoke(IPC_CHANNELS.generationRun, request, IPC_RESPONSE_DATA_SCHEMAS.generationRun),
   cancelGeneration: (taskId) =>

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   registerIpc,
@@ -95,15 +95,10 @@ describe('versioned IPC and path capabilities', () => {
     const previewResponse = await previewInvocation
     expect(previewResponse).toMatchObject({ ok: true, data: preview })
 
-    const selectedOutput = await harness.ipc.invoke(IPC_CHANNELS.filesSelectOutput, 1, {})
-    const outputDirectoryId = successData<{ outputDirectoryId: string }>(
-      selectedOutput
-    ).outputDirectoryId
     const executionInvocation = harness.ipc.invoke(IPC_CHANNELS.sanitizeExecute, 1, {
       schemaVersion: 1,
       taskId,
       planDigest: preview.planDigest,
-      outputDirectoryId,
       acknowledged: true
     })
     await vi.waitFor(() => expect(harness.worker.messages.at(-1)?.type).toBe('execute'))
@@ -111,22 +106,21 @@ describe('versioned IPC and path capabilities', () => {
     if (!executeRequest || executeRequest.type !== 'execute') {
       throw new Error('Missing execute request')
     }
-    expect(executeRequest.outputDirectory).toBe(harness.outputDirectory)
+    // Outputs always land next to the input; the settings choose mode/suffix.
+    expect(executeRequest.outputMode).toBe('suffix')
+    expect(executeRequest.outputSuffix).toBe('_已清洗')
     expect(executeRequest.workspaceRootIdentity).toMatchObject({
       device: expect.stringMatching(/^\d+$/u),
       inode: expect.stringMatching(/^\d+$/u),
       mode: expect.stringMatching(/^\d+$/u)
     })
-    expect(executeRequest.outputDirectoryIdentity).toMatchObject({
-      device: expect.stringMatching(/^\d+$/u),
-      inode: expect.stringMatching(/^\d+$/u),
-      mode: expect.stringMatching(/^\d+$/u)
-    })
+    expect(executeRequest).not.toHaveProperty('outputDirectory')
+    expect(executeRequest).not.toHaveProperty('outputDirectoryIdentity')
     const result = await writeExecutionResultFixture({
       taskId,
       inputSha256: previewRequest.inputs[0]?.snapshot.sha256 as string,
       inputDisplayName: basename(harness.inputPath),
-      outputDirectory: harness.outputDirectory,
+      outputDirectory: harness.inputDirectory,
       workspaceRootPath: harness.workspaceRootPath
     })
     harness.worker.respond(progressMessage(taskId, 'running', 0.2))
@@ -138,7 +132,7 @@ describe('versioned IPC and path capabilities', () => {
 
     const executionResponse = await executionInvocation
     expect(executionResponse.ok).toBe(true)
-    expect(JSON.stringify(executionResponse)).not.toContain(harness.outputDirectory)
+    expect(JSON.stringify(executionResponse)).not.toContain(harness.inputDirectory)
     const publicResult = successData<{
       files: Array<{ fileId: string; kind: string }>
     }>(executionResponse)
@@ -166,8 +160,7 @@ describe('versioned IPC and path capabilities', () => {
     const response = await harness.ipc.invoke(IPC_CHANNELS.sanitizeExecute, 1, {
       schemaVersion: 1,
       taskId: '123e4567-e89b-42d3-a456-426614174000',
-      planDigest: 'c'.repeat(64),
-      outputDirectoryId: '223e4567-e89b-42d3-a456-426614174000'
+      planDigest: 'c'.repeat(64)
     })
 
     expect(response).toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } })
@@ -206,7 +199,7 @@ async function createHarness(): Promise<{
   ipc: FakeIpcMain
   worker: FakeWorker
   inputPath: string
-  outputDirectory: string
+  inputDirectory: string
   workspaceRootPath: string
   shownPaths: string[]
   senders: Map<number, FakeSender>
@@ -215,12 +208,10 @@ async function createHarness(): Promise<{
   const directory = await mkdtemp(join(tmpdir(), 'bid-sentry-ipc-'))
   temporaryDirectories.push(directory)
   const inputPath = join(directory, 'input.docx')
-  const outputDirectory = join(directory, 'output')
   await writeDocxFixture(inputPath)
-  await import('node:fs/promises').then(({ mkdir }) => mkdir(outputDirectory))
   const canonicalInputPath = await realpath(inputPath)
-  const canonicalOutputDirectory = await realpath(outputDirectory)
-  const workspaceRootPath = join(canonicalOutputDirectory, '.bid-sentry-tmp-runtime')
+  const canonicalInputDirectory = await realpath(dirname(inputPath))
+  const workspaceRootPath = join(canonicalInputDirectory, '.bid-sentry-tmp-runtime')
   const ipc = new FakeIpcMain()
   const worker = new FakeWorker()
   const manager = new TaskManager(() => worker, {
@@ -238,7 +229,10 @@ async function createHarness(): Promise<{
         outputDirectoryIdentity: output.identity
       }
     },
-    cleanupWorkspace: async () => undefined
+    cleanupWorkspace: async (workspace) =>
+      import('node:fs/promises').then(({ rm }) =>
+        rm(workspace.rootPath, { recursive: true, force: true })
+      )
   })
   const settingsService = new SettingsService(
     join(directory, 'settings.v1.json'),
@@ -251,14 +245,13 @@ async function createHarness(): Promise<{
     taskManager: manager,
     appVersion: '0.1.0',
     selectInputPaths: async () => [inputPath],
-    selectOutputDirectory: async () => outputDirectory,
     showResultInFolder: (absolutePath) => shownPaths.push(absolutePath)
   })
   return {
     ipc,
     worker,
     inputPath: canonicalInputPath,
-    outputDirectory: canonicalOutputDirectory,
+    inputDirectory: canonicalInputDirectory,
     workspaceRootPath,
     shownPaths,
     senders: ipc.senders,

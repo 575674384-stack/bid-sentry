@@ -855,6 +855,22 @@ function placeholderLabel(type: FieldAction['placeholderType']): string {
   )
 }
 
+function escapeRegExpLiteral(character: string): string {
+  return character.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+}
+
+/**
+ * Regex source matching a literal (non-known) field label. NFKC-normalized,
+ * regex metacharacters escaped, and arbitrary whitespace allowed between
+ * characters so `注册 资本` and `注册资本` are the same slot label.
+ */
+export function literalLabelPattern(label: string): string {
+  const characters = [...label.normalize('NFKC')].filter(
+    (character) => !/[\s\u3000]/u.test(character)
+  )
+  return characters.map(escapeRegExpLiteral).join('[\\s\u3000]*')
+}
+
 export function replaceFieldValue(original: string, label: string, value: string): string {
   const labels: Record<string, string> = {
     bidderName: '投标人(?:名称)?|投标单位(?:名称)?|bidder\\s+name',
@@ -872,7 +888,9 @@ export function replaceFieldValue(original: string, label: string, value: string
     qualityStandard: '质量标准|质量要求|验收标准',
     projectNumber: '项目编号|招标编号|标段编号|项目代码'
   }
-  const labelPattern = labels[label]
+  // Unknown labels belong to dynamic extra fields: match the label literally
+  // so the value still lands in its own slot instead of replacing the node.
+  const labelPattern = labels[label] ?? literalLabelPattern(label)
   if (!labelPattern) return value
   const match = new RegExp(`(${labelPattern})\\s*[：:]?\\s*`, 'iu').exec(original)
   if (!match || match.index === undefined) return value

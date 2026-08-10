@@ -49,7 +49,6 @@ describe('ReviewTaskManager verified publication', () => {
         taskId: '423e4567-e89b-42d3-a456-426614174000',
         tenderInputId: '123e4567-e89b-42d3-a456-426614174000',
         bidInputId: '223e4567-e89b-42d3-a456-426614174000',
-        outputDirectoryId: '323e4567-e89b-42d3-a456-426614174000',
         bidderName: '示例投标单位',
         aiConfirmed: false
       },
@@ -94,7 +93,6 @@ describe('ReviewTaskManager verified publication', () => {
           taskId: '523e4567-e89b-42d3-a456-426614174000',
           tenderInputId: '123e4567-e89b-42d3-a456-426614174000',
           bidInputId: '223e4567-e89b-42d3-a456-426614174000',
-          outputDirectoryId: '323e4567-e89b-42d3-a456-426614174000',
           bidderName: '示例投标单位',
           aiConfirmed: false
         },
@@ -158,6 +156,20 @@ describe('ReviewTaskManager verified publication', () => {
       model: 'synthetic',
       timeoutMs: 5_000,
       maxConcurrency: 1,
+      closeToTray: false,
+      checkUpdatesOnStartup: true,
+      outputMode: 'suffix',
+      outputSuffix: '_已清洗',
+      companyProfile: {
+        bidderName: '',
+        unifiedSocialCreditCode: '',
+        address: '',
+        legalRepresentative: '',
+        authorizedRepresentative: '',
+        contact: '',
+        phone: '',
+        email: ''
+      },
       apiKey: 'synthetic-key',
       clearApiKey: false
     })
@@ -178,7 +190,6 @@ describe('ReviewTaskManager verified publication', () => {
           taskId: '623e4567-e89b-42d3-a456-426614174000',
           tenderInputId: '123e4567-e89b-42d3-a456-426614174000',
           bidInputId: '223e4567-e89b-42d3-a456-426614174000',
-          outputDirectoryId: '323e4567-e89b-42d3-a456-426614174000',
           bidderName: '示例投标单位',
           aiConfirmed: true
         },
@@ -239,6 +250,20 @@ describe('ReviewTaskManager verified publication', () => {
       model: 'synthetic',
       timeoutMs: 5_000,
       maxConcurrency: 1,
+      closeToTray: false,
+      checkUpdatesOnStartup: true,
+      outputMode: 'suffix',
+      outputSuffix: '_已清洗',
+      companyProfile: {
+        bidderName: '',
+        unifiedSocialCreditCode: '',
+        address: '',
+        legalRepresentative: '',
+        authorizedRepresentative: '',
+        contact: '',
+        phone: '',
+        email: ''
+      },
       apiKey: 'synthetic-key',
       clearApiKey: false
     })
@@ -262,7 +287,6 @@ describe('ReviewTaskManager verified publication', () => {
           taskId: '723e4567-e89b-42d3-a456-426614174000',
           tenderInputId: '123e4567-e89b-42d3-a456-426614174000',
           bidInputId: '223e4567-e89b-42d3-a456-426614174000',
-          outputDirectoryId: '323e4567-e89b-42d3-a456-426614174000',
           bidderName: '示例投标单位',
           aiConfirmed: true
         },

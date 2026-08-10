@@ -12,7 +12,7 @@ export interface SanitizationTaskController {
   canPreview: boolean
   canExecute: boolean
   selectFiles(): Promise<void>
-  selectOutputDirectory(): Promise<void>
+  removeFile(inputId: string): void
   createPreview(): Promise<void>
   setAcknowledged(acknowledged: boolean): void
   execute(): Promise<void>
@@ -51,15 +51,9 @@ export function useSanitizationTask(): SanitizationTaskController {
     }
   }, [state.stage])
 
-  const selectOutputDirectory = useCallback(async () => {
-    if (['selecting', 'previewing', 'running', 'verifying'].includes(state.stage)) return
-    try {
-      const directory = await bidSentryApi.selectOutputDirectory()
-      if (directory) dispatch({ type: 'output-selected', directory })
-    } catch (error) {
-      dispatch({ type: 'operation-notice', message: userMessage(error) })
-    }
-  }, [state.stage])
+  const removeFile = useCallback((inputId: string) => {
+    dispatch({ type: 'file-removed', inputId })
+  }, [])
 
   const createPreview = useCallback(async () => {
     if (state.stage !== 'idle' || state.files.length === 0) return
@@ -83,12 +77,11 @@ export function useSanitizationTask(): SanitizationTaskController {
   }, [])
 
   const execute = useCallback(async () => {
-    const { preview, outputDirectory, acknowledged } = state
+    const { preview, acknowledged } = state
     if (
       state.stage !== 'awaiting-confirmation' ||
       state.cancelling ||
       !preview ||
-      !outputDirectory ||
       !acknowledged ||
       hasBlockers(preview)
     ) {
@@ -100,7 +93,6 @@ export function useSanitizationTask(): SanitizationTaskController {
         schemaVersion: 1,
         taskId: preview.taskId,
         planDigest: preview.planDigest,
-        outputDirectoryId: outputDirectory.outputDirectoryId,
         acknowledged: true
       })
       dispatch({ type: 'execution-succeeded', result })
@@ -151,13 +143,11 @@ export function useSanitizationTask(): SanitizationTaskController {
     }
   }, [])
 
-  const canPreview =
-    state.files.length > 0 && (state.stage === 'idle' || state.stage === 'awaiting-confirmation')
+  const canPreview = state.files.length > 0 && state.stage === 'idle'
   const canExecute =
     state.stage === 'awaiting-confirmation' &&
     state.acknowledged &&
     !state.cancelling &&
-    Boolean(state.outputDirectory) &&
     !hasBlockers(state.preview)
 
   return useMemo(
@@ -166,7 +156,7 @@ export function useSanitizationTask(): SanitizationTaskController {
       canPreview,
       canExecute,
       selectFiles,
-      selectOutputDirectory,
+      removeFile,
       createPreview,
       setAcknowledged,
       execute,
@@ -179,7 +169,7 @@ export function useSanitizationTask(): SanitizationTaskController {
       canPreview,
       canExecute,
       selectFiles,
-      selectOutputDirectory,
+      removeFile,
       createPreview,
       setAcknowledged,
       execute,

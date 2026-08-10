@@ -6,7 +6,6 @@ import type { WorkerRequest } from '../../shared/contracts'
 
 export interface E2eHarness {
   readonly inputPaths: readonly string[]
-  readonly outputDirectory: string
   readonly userDataDirectory: string
   createWorker(workerPath: string): ManagedWorkerProcess
   recordRevealedFile(absolutePath: string): void
@@ -19,14 +18,12 @@ export function createE2eHarness(environment: NodeJS.ProcessEnv): E2eHarness {
 
   const root = requiredAbsolutePath(environment, 'BID_SENTRY_E2E_ROOT')
   const inputPaths = parseInputPaths(environment, root)
-  const outputDirectory = pathInsideRoot(environment, 'BID_SENTRY_E2E_OUTPUT', root)
   const userDataDirectory = pathInsideRoot(environment, 'BID_SENTRY_E2E_USER_DATA', root)
   const revealLogPath = pathInsideRoot(environment, 'BID_SENTRY_E2E_REVEAL_LOG', root)
   const executeDelayMs = parseExecuteDelay(environment.BID_SENTRY_E2E_EXECUTE_DELAY_MS)
 
   return Object.freeze({
     inputPaths: Object.freeze(inputPaths),
-    outputDirectory,
     userDataDirectory,
     createWorker(workerPath: string): ManagedWorkerProcess {
       return createDelayedWorker(workerPath, executeDelayMs)

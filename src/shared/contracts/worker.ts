@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { FileSystemIdentitySchema, InputSnapshotSchema } from './documents'
+import { OutputModeSchema, OutputSuffixSchema } from './appSettings'
 import { AppErrorSchema } from './errors'
 import {
   SanitizationPreviewSchema,
@@ -33,18 +34,20 @@ export const WorkerExecuteRequestSchema = z
     type: z.literal('execute'),
     taskId: z.string().uuid(),
     planDigest: z.string().regex(/^[a-f0-9]{64}$/u),
-    outputDirectory: z.string().min(1),
+    // Outputs are always published next to their own input file. `suffix`
+    // appends OutputSuffixSchema to the input base name; `overwrite`
+    // atomically replaces the input only after verification passed.
+    outputMode: OutputModeSchema,
+    outputSuffix: OutputSuffixSchema,
     workspaceRootPath: z.string().min(1),
     workspaceRootIdentity: FileSystemIdentitySchema,
-    outputDirectoryIdentity: FileSystemIdentitySchema,
     appVersion: z.string().trim().min(1).max(100)
   })
   .strict()
 
 export const TaskExecutionRequestSchema = WorkerExecuteRequestSchema.omit({
   workspaceRootPath: true,
-  workspaceRootIdentity: true,
-  outputDirectoryIdentity: true
+  workspaceRootIdentity: true
 })
 
 export const WorkerCancelRequestSchema = z

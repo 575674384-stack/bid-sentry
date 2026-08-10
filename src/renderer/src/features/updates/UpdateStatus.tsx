@@ -1,112 +1,78 @@
-import { useEffect, useState } from 'react'
-import type { UpdateStatus as UpdateStatusValue } from '../../../../shared/contracts'
-import { bidSentryApi, userMessage } from '../../api/bidSentryApi'
+import { IconInfo } from '../../components/icons'
+import { Notice } from '../../components/ui'
+import { updateStateText, updateStateTone, useUpdateStatus } from './useUpdateStatus'
 
-export function UpdateStatus(): React.JSX.Element {
-  const [status, setStatus] = useState<UpdateStatusValue | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+/** Compact update indicator for the sidebar footer. Read-only. */
+export function SidebarUpdateBadge(): React.JSX.Element {
+  const { status } = useUpdateStatus()
+  return (
+    <span className="sidebar-update">
+      <span className={`dot is-${updateStateTone(status)}`} aria-hidden="true" />
+      <span>{updateStateText(status)}</span>
+    </span>
+  )
+}
 
-  useEffect(() => {
-    void bidSentryApi
-      .getUpdateStatus()
-      .then(setStatus)
-      .catch((reason: unknown) => setError(userMessage(reason)))
-  }, [])
-
-  const check = async (): Promise<void> => {
-    setBusy(true)
-    setError(null)
-    try {
-      setStatus(await bidSentryApi.checkUpdates())
-    } catch (reason) {
-      setError(userMessage(reason))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const download = async (): Promise<void> => {
-    setBusy(true)
-    try {
-      setStatus(await bidSentryApi.downloadUpdate())
-    } catch (reason) {
-      setError(userMessage(reason))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const install = async (): Promise<void> => {
-    setBusy(true)
-    try {
-      setStatus(await bidSentryApi.installUpdate())
-    } catch (reason) {
-      setError(userMessage(reason))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const openRelease = async (): Promise<void> => {
-    setBusy(true)
-    setError(null)
-    try {
-      await bidSentryApi.openReleasePage()
-    } catch (reason) {
-      setError(userMessage(reason))
-    } finally {
-      setBusy(false)
-    }
-  }
+/** Full update status + confirmed actions, embedded in the settings page. */
+export function UpdatePanel(): React.JSX.Element {
+  const { status, busy, error, check, download, install, openRelease } = useUpdateStatus()
 
   return (
-    <div className="aside-card update-card" aria-live="polite">
-      <div className="update-card-heading">
-        <div>
-          <span className="aside-number">更新</span>
-          <h3>在线更新</h3>
-        </div>
-        <span className={`update-dot ${status?.state === 'available' ? 'available' : ''}`} />
+    <div className="card-stack" aria-live="polite">
+      <div className="stat-row">
+        <span className="stat-chip">
+          <span className={`dot is-${updateStateTone(status)}`} aria-hidden="true" />
+          {updateStateText(status)}
+        </span>
+        <span className="stat-chip">
+          当前版本 <strong>v{status?.currentVersion ?? '—'}</strong>
+        </span>
+        {status?.latestVersion ? (
+          <span className="stat-chip">
+            最新版本 <strong>v{status.latestVersion}</strong>
+          </span>
+        ) : null}
       </div>
-      <p>仅访问官方 GitHub Releases。检查不会自动下载；下载和安装均需要你的确认。</p>
-      {status?.latestVersion ? (
-        <p className="update-version">最新版本：{status.latestVersion}</p>
-      ) : null}
-      {status?.releasePublishedAt ? (
-        <p className="update-version">
-          发布时间：{new Date(status.releasePublishedAt).toLocaleString()}
-        </p>
-      ) : null}
-      {status?.packageType ? (
-        <p className="update-version">
-          安装包：{status.packageType === 'manual-only' ? '需手动下载' : status.packageType}
-        </p>
-      ) : null}
+
+      <p className="muted text-sm">
+        仅访问官方 GitHub Releases；检查不会自动下载，下载和安装都需要你手动确认。
+        {status?.releasePublishedAt
+          ? ` 发布时间：${new Date(status.releasePublishedAt).toLocaleString()}。`
+          : ''}
+      </p>
+
       {status?.signatureStatus === 'unsigned' ? (
-        <p className="update-warning" role="note">
-          当前发布包未签名；下载前请核对官方 Release 校验和，安装前请确认来源。
-        </p>
+        <Notice tone="warning" title="发布包未签名">
+          下载前请核对官方 Release 页面的校验和，确认来源后再安装。
+        </Notice>
       ) : null}
-      {status?.message ? <p className="update-message">{status.message}</p> : null}
+
+      {status?.message ? <p className="muted text-sm">{status.message}</p> : null}
+
       {status?.releaseNotes ? (
-        <pre className="update-notes" aria-label="更新说明">
+        <pre className="release-notes" aria-label="更新说明">
           {status.releaseNotes}
         </pre>
       ) : null}
-      {error ? <p className="update-error">{error}</p> : null}
-      <div className="update-actions">
+
+      {error ? (
+        <Notice tone="danger" title="更新操作未完成">
+          {error}
+        </Notice>
+      ) : null}
+
+      <div className="btn-row">
         <button
-          className="button secondary"
+          className="btn btn-secondary"
           type="button"
           onClick={() => void check()}
           disabled={busy}
         >
-          {busy && status?.state === 'checking' ? '检查中…' : '检查更新'}
+          {busy && status?.state === 'checking' ? '正在检查…' : '检查更新'}
         </button>
         {status?.state === 'available' ? (
           <button
-            className="button primary"
+            className="btn btn-primary"
             type="button"
             onClick={() => void download()}
             disabled={busy}
@@ -116,21 +82,22 @@ export function UpdateStatus(): React.JSX.Element {
         ) : null}
         {status?.state === 'downloaded' ? (
           <button
-            className="button primary"
+            className="btn btn-primary"
             type="button"
             onClick={() => void install()}
             disabled={busy}
           >
-            打开安装程序
+            安装并重启
           </button>
         ) : null}
         <button
-          className="button secondary"
+          className="btn btn-ghost"
           type="button"
           onClick={() => void openRelease()}
           disabled={busy}
         >
-          打开官方 Release
+          <IconInfo size={14} />
+          查看 Release 页面
         </button>
       </div>
     </div>

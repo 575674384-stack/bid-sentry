@@ -1,158 +1,160 @@
-import type { SanitizationPreview } from '../../../../shared/contracts'
+import type { MetadataPreviewItem, SanitizationPreview } from '../../../../shared/contracts'
+import { Notice } from '../../components/ui'
 import { hasBlockers } from './sanitizerState'
 
 interface PreviewPanelProps {
   preview: SanitizationPreview
   acknowledged: boolean
-  outputReady: boolean
+  outputInfo: string | null
   onAcknowledgedChange(value: boolean): void
 }
 
-const CATEGORY_LABELS: Readonly<Record<string, string>> = {
-  'person-identity': '人员身份',
-  organization: '组织信息',
-  application: '制作软件',
-  timestamp: '时间信息',
-  'document-identifier': '文档标识',
-  description: '描述信息',
-  'custom-property': '自定义属性',
-  'comment-identity': '批注身份',
-  'revision-identity': '修订身份',
-  other: '其他元数据'
-}
+const ACTION_LABELS = {
+  randomize: '随机重置',
+  preserve: '保留原值',
+  warn: '仅提示'
+} as const
 
 export function PreviewPanel(props: PreviewPanelProps): React.JSX.Element {
   const blocked = hasBlockers(props.preview)
   return (
-    <section className="panel" aria-labelledby="preview-title">
-      <div className="panel-heading">
+    <section className="card" aria-labelledby="sanitizer-preview-title">
+      <div className="card-head">
         <div>
-          <p className="step-label">步骤 2</p>
-          <h2 id="preview-title">检查修改范围</h2>
+          <h2 className="card-title" id="sanitizer-preview-title">
+            清洗预览
+          </h2>
+          <p className="card-sub">
+            字段原值与新值仅显示在当前窗口，不会写入报告、历史或诊断；关闭页面即失效。
+          </p>
         </div>
-        <span className={`status-chip ${blocked ? 'danger' : 'success'}`}>
-          {blocked ? '存在阻断项' : '可以安全执行'}
+        <span className={`badge ${blocked ? 'badge-danger' : 'badge-success'}`}>
+          {blocked ? '存在阻断项' : '可以执行'}
         </span>
       </div>
 
-      <p className="panel-intro">
-        以下为本次任务实际使用的随机计划：字段名、清洗前原值和随机新值仅保留在当前窗口内，
-        不会写入报告、历史或诊断。
-      </p>
-
-      <div className="preview-files">
+      <div className="card-stack">
         {props.preview.files.map((file) => {
-          const categories = countCategories(file.fields)
+          const counts = countActions(file.fields)
+          const items = file.items ?? []
           return (
             <article className="preview-file" key={file.inputId}>
-              <div className="preview-file-title">
-                <div>
-                  <span className={`type-pill ${file.documentType}`}>{file.documentType}</span>
-                  <h3>{file.displayName}</h3>
-                </div>
-                <span>{file.fields.reduce((sum, field) => sum + field.occurrences, 0)} 处字段</span>
+              <div className="preview-file-head">
+                <span className={`file-tag file-tag-${file.documentType}`}>
+                  {file.documentType}
+                </span>
+                <span className="file-name" title={file.displayName}>
+                  {file.displayName}
+                </span>
+                <span className="file-size">
+                  {file.fields.reduce((sum, field) => sum + field.occurrences, 0)} 处元数据
+                </span>
               </div>
 
-              {categories.length ? (
-                <div className="category-grid">
-                  {categories.map(([category, count]) => (
-                    <div className="category-item" key={category}>
-                      <span>{CATEGORY_LABELS[category] ?? category}</span>
-                      <strong>{count}</strong>
-                    </div>
+              {counts.length ? (
+                <div className="stat-row" aria-label="处理方式统计">
+                  {counts.map(([action, count]) => (
+                    <span className="stat-chip" key={action}>
+                      {ACTION_LABELS[action]} <strong>{count}</strong>
+                    </span>
                   ))}
                 </div>
               ) : (
-                <p className="quiet-message">没有发现需要重置的元数据字段。</p>
+                <p className="muted text-sm">没有发现需要处理的元数据字段。</p>
               )}
 
-              {(file.items?.length ?? 0) > 0 ? (
-                <div className="metadata-details" aria-label={`${file.displayName} 元数据明细`}>
-                  <div className="metadata-details-heading">
-                    <strong>字段明细</strong>
-                    <span>共 {file.items?.length ?? 0} 项</span>
-                  </div>
-                  <div className="metadata-table-wrap">
-                    <table className="metadata-table">
-                      <thead>
-                        <tr>
-                          <th>字段</th>
-                          <th>清洗前原值</th>
-                          <th>随机新值</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(file.items ?? []).map((item) => (
-                          <tr key={`${item.part}:${item.locator}`}>
-                            <td>
-                              <strong>{item.field}</strong>
-                              <small>{item.part}</small>
-                            </td>
-                            <td className="metadata-value">{item.originalDisplayValue}</td>
-                            <td className="metadata-value replacement">
-                              {item.replacementDisplayValue ?? '保持不变'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+              {items.length > 0 ? (
+                <div className="table-wrap">
+                  <table className="table" data-testid="metadata-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">字段</th>
+                        <th scope="col">当前值</th>
+                        <th scope="col">清洗后</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item) => (
+                        <PreviewRow key={`${item.part}:${item.locator}`} item={item} />
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : null}
 
               {file.warnings.length ? (
-                <div className="notice warning" role="status">
-                  <strong>注意</strong>
+                <Notice tone="warning" title="需要注意">
                   <ul>
                     {file.warnings.map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>
-                </div>
+                </Notice>
               ) : null}
 
               {file.blockers.length ? (
-                <div className="notice danger" role="alert">
-                  <strong>不能处理</strong>
+                <Notice tone="danger" title="无法处理">
                   <ul>
                     {file.blockers.map((blocker) => (
                       <li key={`${blocker.code}-${blocker.message}`}>{blocker.message}</li>
                     ))}
                   </ul>
-                </div>
+                </Notice>
               ) : null}
             </article>
           )
         })}
+
+        {!blocked ? (
+          <>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={props.acknowledged}
+                onChange={(event) => props.onAcknowledgedChange(event.currentTarget.checked)}
+              />
+              <span>
+                <span className="check-title">我已核对预览内容，确认执行清洗</span>
+                <span className="check-hint">
+                  身份类字段随机重置，时间信息保留原值；清洗结果必须通过内容与结构验证才会发布。
+                </span>
+              </span>
+            </label>
+            {props.outputInfo ? <p className="output-line">{props.outputInfo}</p> : null}
+          </>
+        ) : null}
       </div>
-
-      {!blocked ? (
-        <label className="confirmation-box">
-          <input
-            type="checkbox"
-            checked={props.acknowledged}
-            onChange={(event) => props.onAcknowledgedChange(event.currentTarget.checked)}
-          />
-          <span>
-            <strong>我已查看修改类别，并同意生成新的清洗副本。</strong>
-            <small>应用会强制验证正文和结构；验证失败不会发布结果。</small>
-          </span>
-        </label>
-      ) : null}
-
-      {!props.outputReady && !blocked ? (
-        <p className="inline-hint">还需要在步骤 1 选择输出目录，才能开始清洗。</p>
-      ) : null}
     </section>
   )
 }
 
-function countCategories(
+function PreviewRow({ item }: { item: MetadataPreviewItem }): React.JSX.Element {
+  return (
+    <tr>
+      <td>
+        <strong>{item.field}</strong>
+        <div className="muted text-sm">{item.part}</div>
+      </td>
+      <td className="cell-value">{item.originalDisplayValue}</td>
+      <td>
+        {item.action === 'preserve' ? (
+          <span className="badge badge-success">保留原值</span>
+        ) : item.replacementDisplayValue !== null ? (
+          <span className="cell-value">{item.replacementDisplayValue}</span>
+        ) : (
+          <span className="badge badge-neutral">保持原值</span>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+function countActions(
   fields: SanitizationPreview['files'][number]['fields']
-): Array<[string, number]> {
-  const counts = new Map<string, number>()
+): Array<[keyof typeof ACTION_LABELS, number]> {
+  const counts = new Map<keyof typeof ACTION_LABELS, number>()
   for (const field of fields) {
-    counts.set(field.category, (counts.get(field.category) ?? 0) + field.occurrences)
+    counts.set(field.action, (counts.get(field.action) ?? 0) + field.occurrences)
   }
   return [...counts.entries()]
 }

@@ -12,7 +12,7 @@ export interface PdfMetadataOccurrence {
   field: string
   category: MetadataFieldCategory
   valueType: MetadataValueType
-  action: 'randomize' | 'warn'
+  action: 'randomize' | 'preserve' | 'warn'
   replacementKind: PdfReplacementKind | null
   originalValue: string
   dateRole: PdfDateRole
@@ -28,7 +28,8 @@ export interface PdfMetadataSpec {
   field: string
   category: MetadataFieldCategory
   valueType: MetadataValueType
-  replacementKind: PdfReplacementKind
+  action: 'randomize' | 'preserve'
+  replacementKind: PdfReplacementKind | null
   dateRole?: Exclude<PdfDateRole, null>
 }
 

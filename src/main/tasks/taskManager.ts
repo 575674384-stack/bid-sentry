@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto'
 import {
   TaskProgressSchema,
   TaskExecutionRequestSchema,
-  FileSystemIdentitySchema,
   TemporaryWorkspaceDescriptorSchema,
   WorkerExecuteRequestSchema,
   WorkerPreviewRequestSchema,
@@ -30,6 +29,7 @@ import {
   type PublishedFile
 } from '../../core/documents/fileSafety'
 import { sameFileSystemIdentity } from '../../core/documents/pathSafety'
+import { resolvePathIdentityWithoutSymbolicLinks } from '../../core/documents/pathSafety'
 import { aggregateVerification } from '../../core/sanitization/verificationSummary'
 import { validateExecutionResultArtifacts } from './validateExecutionResult'
 
@@ -69,8 +69,12 @@ interface TaskRecord {
   state: TaskState
   preview: Deferred<SanitizationPreview>
   execution: Deferred<WorkerExecutionResult> | null
-  expectedOutputDirectory: string | null
-  expectedOutputDirectoryIdentity: FileSystemIdentity | null
+  /** Input directories, resolved and in preview order; every output is
+   * published next to its own input, reports into the first directory. */
+  inputDirectories: string[]
+  inputDirectoryIdentity: FileSystemIdentity | null
+  /** Identity attestation started at preview; execution awaits it. */
+  attestation: Promise<void> | null
   workspace: TemporaryWorkspaceDescriptor | null
   operationTimer: NodeJS.Timeout | null
   killTimer: NodeJS.Timeout | null
@@ -160,8 +164,11 @@ export class TaskManager {
       state: 'created',
       preview: deferred<SanitizationPreview>(),
       execution: null,
-      expectedOutputDirectory: null,
-      expectedOutputDirectoryIdentity: null,
+      inputDirectories: request.inputs.map((input) =>
+        resolve(dirname(input.snapshot.absolutePath))
+      ),
+      inputDirectoryIdentity: null,
+      attestation: null,
       workspace: null,
       operationTimer: null,
       killTimer: null,
@@ -170,6 +177,7 @@ export class TaskManager {
       intentionalExit: false,
       settled: false
     }
+    record.attestation = this.#attestInputDirectories(record)
     this.#tasks.set(request.taskId, record)
     try {
       worker.on('message', (message) => void this.#handleMessage(record, message))
@@ -179,23 +187,37 @@ export class TaskManager {
     } catch {
       void this.#fail(record, createAppError('INTERNAL_ERROR')).catch(() => undefined)
     }
-    return record.preview.promise
+    // The preview only resolves after the input directories were attested, so
+    // execution can deterministically compare against the preview-time state.
+    return Promise.all([record.preview.promise, record.attestation]).then(([preview]) => preview)
   }
 
-  execute(
-    requestInput: TaskExecutionRequest,
-    selectedOutputDirectoryIdentity: FileSystemIdentity
-  ): Promise<WorkerExecutionResult> {
+  /** Resolve and attest every input directory once, at preview time. */
+  #attestInputDirectories(record: TaskRecord): Promise<void> {
+    return Promise.all(
+      record.inputDirectories.map((directory) =>
+        resolvePathIdentityWithoutSymbolicLinks(directory).then(
+          (resolved) => ({ canonicalPath: resolved.canonicalPath, identity: resolved.identity }),
+          () => null
+        )
+      )
+    ).then((resolved) => {
+      if (resolved.some((item) => item === null)) return
+      record.inputDirectories = resolved.map(
+        (item) => (item as { canonicalPath: string }).canonicalPath
+      )
+      record.inputDirectoryIdentity = (resolved[0] as { identity: FileSystemIdentity }).identity
+    })
+  }
+
+  execute(requestInput: TaskExecutionRequest): Promise<WorkerExecutionResult> {
     const request = TaskExecutionRequestSchema.parse(requestInput)
-    const outputDirectoryIdentity = FileSystemIdentitySchema.parse(selectedOutputDirectoryIdentity)
     const record = this.#tasks.get(request.taskId)
     if (!record || record.state !== 'awaiting-confirmation' || record.execution) {
       throw new TaskManagerError(createAppError('TASK_NOT_FOUND'))
     }
 
     record.execution = deferred<WorkerExecutionResult>()
-    record.expectedOutputDirectory = resolve(request.outputDirectory)
-    record.expectedOutputDirectoryIdentity = outputDirectoryIdentity
     this.#armOperationTimer(record)
     void this.#prepareExecution(record, request)
     return record.execution.promise
@@ -286,7 +308,7 @@ export class TaskManager {
       try {
         publishedFiles = await validateExecutionResultArtifacts({
           result: message.result,
-          outputDirectory: record.workspace.outputDirectory,
+          outputDirectories: record.inputDirectories,
           workspaceRootPath: record.workspace.rootPath,
           logicalResultValid
         })
@@ -348,14 +370,15 @@ export class TaskManager {
 
   async #prepareExecution(record: TaskRecord, request: TaskExecutionRequest): Promise<void> {
     try {
-      const expectedOutput = record.expectedOutputDirectory
-      const expectedOutputIdentity = record.expectedOutputDirectoryIdentity
-      if (!expectedOutput || !expectedOutputIdentity) {
+      await record.attestation
+      const inputDirectories = record.inputDirectories
+      const inputDirectoryIdentity = record.inputDirectoryIdentity
+      if (inputDirectories.length === 0 || !inputDirectoryIdentity) {
         await this.#fail(record, createAppError('INTERNAL_ERROR'))
         return
       }
       const workspace = TemporaryWorkspaceDescriptorSchema.parse(
-        await this.#createWorkspace(request.outputDirectory, expectedOutputIdentity)
+        await this.#createWorkspace(inputDirectories[0] as string, inputDirectoryIdentity)
       )
       if (record.settled) {
         await this.#cleanupWorkspace(workspace)
@@ -363,10 +386,10 @@ export class TaskManager {
       }
       if (
         normalizeFileIdentity(workspace.outputDirectory) !==
-          normalizeFileIdentity(expectedOutput) ||
-        !sameFileSystemIdentity(workspace.outputDirectoryIdentity, expectedOutputIdentity) ||
+          normalizeFileIdentity(inputDirectories[0] as string) ||
+        !sameFileSystemIdentity(workspace.outputDirectoryIdentity, inputDirectoryIdentity) ||
         normalizeFileIdentity(dirname(resolve(workspace.rootPath))) !==
-          normalizeFileIdentity(expectedOutput) ||
+          normalizeFileIdentity(inputDirectories[0] as string) ||
         !basename(resolve(workspace.rootPath)).startsWith('.bid-sentry-tmp-')
       ) {
         await this.#cleanupWorkspace(workspace).catch(() => undefined)
@@ -387,8 +410,7 @@ export class TaskManager {
         WorkerExecuteRequestSchema.parse({
           ...request,
           workspaceRootPath: record.workspace.rootPath,
-          workspaceRootIdentity: record.workspace.rootIdentity,
-          outputDirectoryIdentity: record.workspace.outputDirectoryIdentity
+          workspaceRootIdentity: record.workspace.rootIdentity
         })
       )
     } catch (error) {
@@ -457,13 +479,13 @@ export class TaskManager {
   }
 
   #executionResultMatches(record: TaskRecord, result: WorkerExecutionResult): boolean {
-    const expectedDirectory = record.expectedOutputDirectory
+    const expectedDirectories = record.inputDirectories
     const completionVerification = record.pendingCompletion?.verification
     const reportVerification = aggregateVerification(
       result.report.files.map((file) => file.verification)
     )
     if (
-      !expectedDirectory ||
+      expectedDirectories.length === 0 ||
       !completionVerification ||
       JSON.stringify(completionVerification) !== JSON.stringify(result.completionVerification) ||
       JSON.stringify(reportVerification) !== JSON.stringify(result.completionVerification) ||
@@ -475,16 +497,18 @@ export class TaskManager {
       result.outputPaths.some(
         (outputPath, index) =>
           normalizeFileIdentity(dirname(resolve(outputPath))) !==
-            normalizeFileIdentity(expectedDirectory) ||
+            normalizeFileIdentity(expectedDirectories[index] as string) ||
           basename(outputPath) !== result.report.files[index]?.outputDisplayName
       )
     ) {
       return false
     }
+    const reportDirectory = expectedDirectories[0]
+    if (!reportDirectory) return false
     return [result.jsonReportPath, result.htmlReportPath].every(
       (reportPath) =>
         normalizeFileIdentity(dirname(resolve(reportPath))) ===
-        normalizeFileIdentity(expectedDirectory)
+        normalizeFileIdentity(reportDirectory)
     )
   }
 

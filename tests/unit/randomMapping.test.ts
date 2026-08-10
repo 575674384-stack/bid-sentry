@@ -49,19 +49,19 @@ describe('TaskRandomMapping', () => {
     expect(organizations.size).toBe(1_000)
   })
 
-  it('generates ordered created and modified timestamps that are not in the future', () => {
+  it('generates stable past timestamps that are not in the future', () => {
     const mapping = new TaskRandomMapping(() => NOW)
-    const pair = mapping.timestampPair('old created', 'old modified')
+    const first = mapping.timestamp('old created')
 
-    expect(Date.parse(pair.created)).toBeLessThanOrEqual(Date.parse(pair.modified))
-    expect(Date.parse(pair.modified)).toBeLessThanOrEqual(NOW)
-    expect(mapping.timestampPair('old created', 'old modified')).toEqual(pair)
+    expect(Date.parse(first)).toBeGreaterThanOrEqual(NOW - ONE_YEAR_MS)
+    expect(Date.parse(first)).toBeLessThanOrEqual(NOW)
+    // The same original timestamp maps deterministically within one task.
+    expect(mapping.timestamp('old created')).toBe(first)
 
     const originalCreated = '2026-08-08T08:00:00.000Z'
-    const originalModified = '2026-08-08T09:00:00.000Z'
-    const distinctPair = mapping.timestampPair(originalCreated, originalModified)
-    expect(distinctPair.created).not.toBe(originalCreated)
-    expect(distinctPair.modified).not.toBe(originalModified)
+    const mappedCreated = mapping.timestamp(originalCreated)
+    expect(mappedCreated).not.toBe(originalCreated)
+    expect(Date.parse(mappedCreated)).toBeLessThanOrEqual(NOW)
   })
 
   it('does not expose original values through enumerable state and cannot be reused after destroy', () => {

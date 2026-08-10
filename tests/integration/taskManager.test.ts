@@ -59,13 +59,13 @@ describe('TaskManager', () => {
     const progressEvents: TaskProgress[] = []
     const unsubscribe = manager.subscribe((progress) => progressEvents.push(progress))
 
-    const previewPromise = manager.preview(previewRequest())
+    const previewPromise = manager.preview(previewRequest(outputDirectory))
     worker.respond(progressMessage('previewing', 0.1))
     worker.respond(progressMessage('awaiting-confirmation', 0.9))
     worker.respond({ schemaVersion: 1, type: 'preview-result', preview: previewResult() })
     await expect(previewPromise).resolves.toEqual(previewResult())
 
-    const executionPromise = manager.execute(executeRequest(outputDirectory), TEST_IDENTITY)
+    const executionPromise = manager.execute(executeRequest())
     await waitForExecute(worker)
     const result = await writeExecutionResultFixture({
       taskId: TASK_ID,
@@ -154,8 +154,8 @@ describe('TaskManager', () => {
     const outputDirectory = await createTemporaryDirectory()
     const worker = new FakeWorker()
     const manager = createManager(worker)
-    await resolvePreview(manager, worker)
-    const executionPromise = manager.execute(executeRequest(outputDirectory), TEST_IDENTITY)
+    await resolvePreview(manager, worker, outputDirectory)
+    const executionPromise = manager.execute(executeRequest())
     await waitForExecute(worker)
     worker.throwOnPost = true
     worker.throwOnKill = true
@@ -224,24 +224,18 @@ describe('TaskManager', () => {
 
   it('cleans an exact registered temporary workspace after an execution crash', async () => {
     const outputDirectory = await createTemporaryDirectory()
-    const rootPath = await mkdtemp(join(outputDirectory, '.bid-sentry-tmp-'))
     const worker = new FakeWorker()
     const manager = createManager(worker, {
-      createWorkspace: async () => ({
-        rootPath,
-        outputDirectory,
-        rootIdentity: TEST_IDENTITY,
-        outputDirectoryIdentity: TEST_IDENTITY
-      }),
       cleanupWorkspace: async (workspace) =>
         rm(workspace.rootPath, { recursive: true, force: true })
     })
-    const previewPromise = manager.preview(previewRequest())
+    const previewPromise = manager.preview(previewRequest(outputDirectory))
     worker.respond(progressMessage('previewing', 0.1))
     worker.respond(progressMessage('awaiting-confirmation', 0.9))
     worker.respond({ schemaVersion: 1, type: 'preview-result', preview: previewResult() })
     await previewPromise
-    const executionPromise = manager.execute(executeRequest(outputDirectory), TEST_IDENTITY)
+    const rootPath = join(outputDirectory, '.bid-sentry-tmp-test')
+    const executionPromise = manager.execute(executeRequest())
     await waitForExecute(worker)
     worker.respond(progressMessage('running', 0.2))
 
@@ -268,31 +262,29 @@ describe('TaskManager', () => {
         cleaned.push(workspace.rootPath)
       }
     })
-    await resolvePreview(manager, worker)
+    await resolvePreview(manager, worker, outputDirectory)
 
-    await expect(
-      manager.execute(executeRequest(outputDirectory), TEST_IDENTITY)
-    ).rejects.toMatchObject({ appError: { code: 'INTERNAL_ERROR' } })
+    await expect(manager.execute(executeRequest())).rejects.toMatchObject({
+      appError: { code: 'INTERNAL_ERROR' }
+    })
 
     expect(worker.messages.some((message) => message.type === 'execute')).toBe(false)
     expect(cleaned).toEqual([join(outputDirectory, '.bid-sentry-tmp-test')])
   })
 
-  it('passes the selected identity to the default workspace creator before creating files', async () => {
+  it('rejects when the input directory is replaced between preview and execution', async () => {
     const outputDirectory = await createTemporaryDirectory()
-    const selectedIdentity = (await resolvePathIdentityWithoutSymbolicLinks(outputDirectory))
-      .identity
     const detachedDirectory = `${outputDirectory}-selected`
     temporaryDirectories.push(detachedDirectory)
-    await rename(outputDirectory, detachedDirectory)
-    await mkdir(outputDirectory)
     const worker = new FakeWorker()
     const manager = new TaskManager(() => worker)
-    await resolvePreview(manager, worker)
+    await resolvePreview(manager, worker, outputDirectory)
+    await rename(outputDirectory, detachedDirectory)
+    await mkdir(outputDirectory)
 
-    await expect(
-      manager.execute(executeRequest(outputDirectory), selectedIdentity)
-    ).rejects.toMatchObject({ appError: { code: 'FILE_CHANGED' } })
+    await expect(manager.execute(executeRequest())).rejects.toMatchObject({
+      appError: { code: 'FILE_CHANGED' }
+    })
 
     expect(worker.messages.some((message) => message.type === 'execute')).toBe(false)
     expect(
@@ -307,8 +299,8 @@ describe('TaskManager', () => {
     const manager = createManager(worker)
     const events: TaskProgress[] = []
     manager.subscribe((progress) => events.push(progress))
-    await resolvePreview(manager, worker)
-    const executionPromise = manager.execute(executeRequest(outputDirectory), TEST_IDENTITY)
+    await resolvePreview(manager, worker, outputDirectory)
+    const executionPromise = manager.execute(executeRequest())
     await waitForExecute(worker)
     const result = await writeExecutionResultFixture({
       taskId: TASK_ID,
@@ -346,8 +338,8 @@ describe('TaskManager', () => {
     })
     const events: TaskProgress[] = []
     manager.subscribe((progress) => events.push(progress))
-    await resolvePreview(manager, worker)
-    const executionPromise = manager.execute(executeRequest(outputDirectory), TEST_IDENTITY)
+    await resolvePreview(manager, worker, outputDirectory)
+    const executionPromise = manager.execute(executeRequest())
     await waitForExecute(worker)
     const result = await writeExecutionResultFixture({
       taskId: TASK_ID,
@@ -383,8 +375,8 @@ describe('TaskManager', () => {
         throw new Error('synthetic cleanup failure')
       }
     })
-    await resolvePreview(manager, worker)
-    const executionPromise = manager.execute(executeRequest(outputDirectory), TEST_IDENTITY)
+    await resolvePreview(manager, worker, outputDirectory)
+    const executionPromise = manager.execute(executeRequest())
     await waitForExecute(worker)
     const result = await writeExecutionResultFixture({
       taskId: TASK_ID,
@@ -413,8 +405,8 @@ describe('TaskManager', () => {
     const manager = createManager(worker)
     const events: TaskProgress[] = []
     manager.subscribe((progress) => events.push(progress))
-    await resolvePreview(manager, worker)
-    const executionPromise = manager.execute(executeRequest(outputDirectory), TEST_IDENTITY)
+    await resolvePreview(manager, worker, outputDirectory)
+    const executionPromise = manager.execute(executeRequest())
     await waitForExecute(worker)
     const result = await writeExecutionResultFixture({
       taskId: TASK_ID,
@@ -519,7 +511,7 @@ class FakeWorker extends EventEmitter implements ManagedWorkerProcess {
   }
 }
 
-function previewRequest(): WorkerPreviewRequest {
+function previewRequest(inputDirectory = '/safe'): WorkerPreviewRequest {
   return {
     schemaVersion: 1,
     type: 'preview',
@@ -529,7 +521,7 @@ function previewRequest(): WorkerPreviewRequest {
         inputId: INPUT_ID,
         snapshot: {
           schemaVersion: 1,
-          absolutePath: '/safe/input.docx',
+          absolutePath: join(inputDirectory, 'input.docx'),
           displayName: 'input.docx',
           documentType: 'docx',
           size: 100,
@@ -541,26 +533,35 @@ function previewRequest(): WorkerPreviewRequest {
   }
 }
 
-function executeRequest(outputDirectory: string): TaskExecutionRequest {
+function executeRequest(): TaskExecutionRequest {
   return {
     schemaVersion: 1,
     type: 'execute',
     taskId: TASK_ID,
     planDigest: 'c'.repeat(64),
-    outputDirectory,
+    outputMode: 'suffix',
+    outputSuffix: '_已清洗',
     appVersion: '0.1.0'
   }
 }
 
 function createManager(worker: FakeWorker, options: TaskManagerOptions = {}): TaskManager {
   return new TaskManager(() => worker, {
-    createWorkspace: async (outputDirectory) => ({
-      rootPath: join(outputDirectory, '.bid-sentry-tmp-test'),
-      outputDirectory,
-      rootIdentity: TEST_IDENTITY,
-      outputDirectoryIdentity: TEST_IDENTITY
-    }),
-    cleanupWorkspace: async () => undefined,
+    createWorkspace: async (outputDirectory) => {
+      const rootPath = join(outputDirectory, '.bid-sentry-tmp-test')
+      await mkdir(rootPath, { recursive: true })
+      const [root, output] = await Promise.all([
+        resolvePathIdentityWithoutSymbolicLinks(rootPath),
+        resolvePathIdentityWithoutSymbolicLinks(outputDirectory)
+      ])
+      return {
+        rootPath: root.canonicalPath,
+        outputDirectory: output.canonicalPath,
+        rootIdentity: root.identity,
+        outputDirectoryIdentity: output.identity
+      }
+    },
+    cleanupWorkspace: async (workspace) => rm(workspace.rootPath, { recursive: true, force: true }),
     ...options
   })
 }
@@ -614,8 +615,12 @@ async function createTemporaryDirectory(): Promise<string> {
   return directory
 }
 
-async function resolvePreview(manager: TaskManager, worker: FakeWorker): Promise<void> {
-  const previewPromise = manager.preview(previewRequest())
+async function resolvePreview(
+  manager: TaskManager,
+  worker: FakeWorker,
+  inputDirectory = '/safe'
+): Promise<void> {
+  const previewPromise = manager.preview(previewRequest(inputDirectory))
   worker.respond(progressMessage('previewing', 0.1))
   worker.respond(progressMessage('awaiting-confirmation', 0.9))
   worker.respond({ schemaVersion: 1, type: 'preview-result', preview: previewResult() })

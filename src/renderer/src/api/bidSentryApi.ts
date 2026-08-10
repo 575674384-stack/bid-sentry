@@ -6,7 +6,6 @@ import {
   SanitizationTaskResultSchema,
   ResultShownSchema,
   SelectedInputFilesSchema,
-  SelectedOutputDirectorySchema,
   TaskCancellationResultSchema,
   TaskProgressSchema,
   type AiConnectionTestResult,
@@ -17,7 +16,6 @@ import {
   type SanitizationPreview,
   type SanitizationTaskResult,
   type SelectedInputFiles,
-  type SelectedOutputDirectory,
   type TaskProgress,
   UpdateStatusSchema,
   UpdateActionResultSchema,
@@ -27,11 +25,14 @@ import {
   ReviewResultSchema,
   type ReviewRequest,
   type ReviewResult,
-  GenerationPreviewSchema,
+  GenerationAnalysisSchema,
+  GenerationPlanSchema,
   GenerationResultSchema,
-  type GenerationPreviewRequest,
-  type GenerationRequest,
-  type GenerationPreview,
+  type GenerationAnalyzeRequest,
+  type GenerationPlanRequest,
+  type GenerationRunRequest,
+  type GenerationAnalysis,
+  type GenerationPlan,
   type GenerationResult
 } from '../../../shared/contracts'
 
@@ -41,7 +42,6 @@ interface RendererBridge {
   saveSettings(update: AiSettingsUpdate): Promise<unknown>
   testAiConnection(update: AiSettingsUpdate): Promise<unknown>
   selectInputFiles(): Promise<unknown>
-  selectOutputDirectory(): Promise<unknown>
   previewSanitization(inputIds: readonly string[]): Promise<unknown>
   executeSanitization(command: SanitizationCommand): Promise<unknown>
   cancelTask(taskId: string): Promise<unknown>
@@ -56,8 +56,9 @@ interface RendererBridge {
   startReview(): Promise<unknown>
   runReview(request: ReviewRequest): Promise<unknown>
   cancelReview(taskId: string): Promise<unknown>
-  previewGeneration(request: GenerationPreviewRequest): Promise<unknown>
-  runGeneration(request: GenerationRequest): Promise<unknown>
+  analyzeGeneration(request: GenerationAnalyzeRequest): Promise<unknown>
+  planGeneration(request: GenerationPlanRequest): Promise<unknown>
+  runGeneration(request: GenerationRunRequest): Promise<unknown>
   cancelGeneration(taskId: string): Promise<unknown>
 }
 
@@ -82,9 +83,6 @@ export const bidSentryApi = Object.freeze({
   },
   selectInputFiles(): Promise<SelectedInputFiles> {
     return invoke(() => bridge().selectInputFiles(), SelectedInputFilesSchema)
-  },
-  selectOutputDirectory(): Promise<SelectedOutputDirectory | null> {
-    return invoke(() => bridge().selectOutputDirectory(), SelectedOutputDirectorySchema.nullable())
   },
   previewSanitization(inputIds: readonly string[]): Promise<SanitizationPreview> {
     return invoke(() => bridge().previewSanitization(inputIds), SanitizationPreviewSchema)
@@ -136,10 +134,13 @@ export const bidSentryApi = Object.freeze({
       () => undefined
     )
   },
-  previewGeneration(request: GenerationPreviewRequest): Promise<GenerationPreview> {
-    return invoke(() => bridge().previewGeneration(request), GenerationPreviewSchema)
+  analyzeGeneration(request: GenerationAnalyzeRequest): Promise<GenerationAnalysis> {
+    return invoke(() => bridge().analyzeGeneration(request), GenerationAnalysisSchema)
   },
-  runGeneration(request: GenerationRequest): Promise<GenerationResult> {
+  planGeneration(request: GenerationPlanRequest): Promise<GenerationPlan> {
+    return invoke(() => bridge().planGeneration(request), GenerationPlanSchema)
+  },
+  runGeneration(request: GenerationRunRequest): Promise<GenerationResult> {
     return invoke(() => bridge().runGeneration(request), GenerationResultSchema)
   },
   cancelGeneration(taskId: string): Promise<void> {

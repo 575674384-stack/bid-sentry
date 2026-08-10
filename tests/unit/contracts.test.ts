@@ -40,7 +40,12 @@ describe('AI settings contracts', () => {
       timeoutMs: 15_000,
       maxConcurrency: 1,
       hasApiKey: true,
-      secretPersistence: 'encrypted'
+      secretPersistence: 'encrypted',
+      closeToTray: false,
+      checkUpdatesOnStartup: true,
+      outputMode: 'suffix',
+      outputSuffix: '_已清洗',
+      companyProfile: {}
     })
 
     expect(settings.hasApiKey).toBe(true)
@@ -55,6 +60,11 @@ describe('AI settings contracts', () => {
       model: 'example-model',
       timeoutMs: 15_000,
       maxConcurrency: 2,
+      closeToTray: false,
+      checkUpdatesOnStartup: true,
+      outputMode: 'suffix',
+      outputSuffix: '_已清洗',
+      companyProfile: {},
       apiKey: 'temporary-input'
     })
 
@@ -135,14 +145,14 @@ describe('strict report and IPC contracts', () => {
       type: 'execute' as const,
       taskId: TASK_ID,
       planDigest: 'c'.repeat(64),
-      outputDirectory: '/safe/output',
+      outputMode: 'suffix' as const,
+      outputSuffix: '_已清洗',
       appVersion: '0.1.0'
     }
     const workerRequest = {
       ...taskRequest,
       workspaceRootPath: '/safe/output/.bid-sentry-tmp-test',
-      workspaceRootIdentity: identity,
-      outputDirectoryIdentity: identity
+      workspaceRootIdentity: identity
     }
 
     expect(WorkerRequestSchema.safeParse(workerRequest).success).toBe(true)

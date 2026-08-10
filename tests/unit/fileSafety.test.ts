@@ -282,16 +282,22 @@ describe('immutable input and output boundaries', () => {
     }
   )
 
-  it('builds a stable output name and refuses an existing target', async () => {
+  it('builds a stable output name next to the input and refuses an existing target', async () => {
     const directory = await createTemporaryDirectory()
-    const outputPath = buildSanitizedOutputPath('/source/Bid.DOCX', directory)
+    const suffixOutput = buildSanitizedOutputPath('/source/Bid.DOCX', 'suffix', '_已清洗')
 
-    expect(outputPath).toBe(join(directory, 'Bid_sanitized.docx'))
-    await expect(assertOutputAvailable(outputPath)).resolves.toBeUndefined()
-    await writeFile(outputPath, 'occupied', 'utf8')
-    await expect(assertOutputAvailable(outputPath)).rejects.toMatchObject({
+    expect(suffixOutput).toBe(join('/source', 'Bid_已清洗.docx'))
+    const realOutput = buildSanitizedOutputPath(join(directory, 'Bid.DOCX'), 'suffix', '_已清洗')
+    await expect(assertOutputAvailable(realOutput)).resolves.toBeUndefined()
+    await writeFile(realOutput, 'occupied', 'utf8')
+    await expect(assertOutputAvailable(realOutput)).rejects.toMatchObject({
       appError: { code: 'OUTPUT_EXISTS' }
     })
+
+    // Overwrite mode reuses the input path itself; the input still exists and
+    // is guarded by assertInputUnchanged at publication time.
+    const inputPath = join(directory, 'Bid.docx')
+    expect(buildSanitizedOutputPath(inputPath, 'overwrite', '_ignored')).toBe(inputPath)
   })
 
   it('publishes only a registered file with matching passed verification', async () => {
@@ -304,7 +310,7 @@ describe('immutable input and output boundaries', () => {
     const temporaryPath = await reserveTemporaryFile(workspace, 'input_sanitized.pdf')
     await writeFile(temporaryPath, '%PDF-1.7\nsanitized\n%%EOF', 'utf8')
     const outputSha256 = await sha256File(temporaryPath)
-    const outputPath = buildSanitizedOutputPath(inputPath, workspace.outputDirectory)
+    const outputPath = buildSanitizedOutputPath(inputPath, 'suffix', '_已清洗')
 
     await finalizeVerifiedOutput({
       workspace,
@@ -329,7 +335,7 @@ describe('immutable input and output boundaries', () => {
     const workspace = await createTemporaryWorkspace(directory)
     const temporaryPath = await reserveTemporaryFile(workspace, 'input_sanitized.pdf')
     await writeFile(temporaryPath, '%PDF-1.7\nsanitary output\n%%EOF', 'utf8')
-    const outputPath = buildSanitizedOutputPath(inputPath, workspace.outputDirectory)
+    const outputPath = buildSanitizedOutputPath(inputPath, 'suffix', '_已清洗')
     const published = await finalizeVerifiedOutput({
       workspace,
       input,
@@ -357,6 +363,36 @@ describe('immutable input and output boundaries', () => {
     await cleanupTemporaryWorkspace(workspace)
   })
 
+  it('overwrite mode backs up the original and restores it on rollback', async () => {
+    const directory = await createTemporaryDirectory()
+    const inputPath = join(directory, 'input.pdf')
+    await writeMinimalPdf(inputPath)
+    const input = await createInputSnapshot(inputPath)
+    const before = await readFile(inputPath)
+    const workspace = await createTemporaryWorkspace(directory)
+    const temporaryPath = await reserveTemporaryFile(workspace, 'input_sanitized.pdf')
+    await writeFile(temporaryPath, '%PDF-1.7\noverwritten\n%%EOF', 'utf8')
+    const outputPath = buildSanitizedOutputPath(inputPath, 'overwrite', '_ignored')
+    expect(outputPath).toBe(join(directory, 'input.pdf'))
+
+    const published = await finalizeVerifiedOutput({
+      workspace,
+      input,
+      temporaryPath,
+      outputPath,
+      verification: passedVerification(input.sha256, await sha256File(temporaryPath)),
+      mode: 'overwrite',
+      outputDirectory: directory
+    })
+    expect(published.backupPath).toBeDefined()
+    expect(await readFile(inputPath, 'utf8')).toContain('overwritten')
+
+    // Rollback restores the original input bytes from the workspace backup.
+    await rollbackPublishedFiles([published])
+    expect(await readFile(inputPath)).toEqual(before)
+    await cleanupTemporaryWorkspace(workspace)
+  })
+
   it('rejects failed verification, changed temp data and output races', async () => {
     const directory = await createTemporaryDirectory()
     const inputPath = join(directory, 'input.pdf')
@@ -366,7 +402,7 @@ describe('immutable input and output boundaries', () => {
     const temporaryPath = await reserveTemporaryFile(workspace, 'input_sanitized.pdf')
     await writeFile(temporaryPath, '%PDF-1.7\nfirst\n%%EOF', 'utf8')
     const verifiedSha256 = await sha256File(temporaryPath)
-    const outputPath = buildSanitizedOutputPath(inputPath, workspace.outputDirectory)
+    const outputPath = buildSanitizedOutputPath(inputPath, 'suffix', '_已清洗')
 
     const failedVerification: VerificationReport = {
       schemaVersion: 1,
