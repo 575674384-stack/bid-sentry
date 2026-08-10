@@ -8,10 +8,12 @@ import {
   MAX_IPC_REQUEST_BYTES,
   MAX_IPC_RESPONSE_BYTES,
   TaskProgressSchema,
+  UpdateStatusSchema,
   type AiSettingsUpdate,
   type IpcResponseEnvelope,
   type SanitizationCommand,
   type TaskProgress,
+  type UpdateStatus,
   type ReviewRequest,
   type GenerationAnalyzeRequest,
   type GenerationPlanRequest,
@@ -29,6 +31,7 @@ export interface BidSentryApi {
   cancelTask(taskId: string): Promise<IpcResponseEnvelope>
   showResultInFolder(fileId: string): Promise<IpcResponseEnvelope>
   onTaskProgress(listener: (progress: TaskProgress) => void): () => void
+  onUpdateStatus(listener: (status: UpdateStatus) => void): () => void
   getUpdateStatus(): Promise<IpcResponseEnvelope>
   checkUpdates(): Promise<IpcResponseEnvelope>
   downloadUpdate(): Promise<IpcResponseEnvelope>
@@ -77,6 +80,20 @@ const api: BidSentryApi = {
       if (!subscribed) return
       subscribed = false
       ipcRenderer.removeListener(IPC_CHANNELS.taskSubscribe, handler)
+    }
+  },
+  onUpdateStatus(listener) {
+    const handler = (_event: Electron.IpcRendererEvent, rawStatus: unknown): void => {
+      if (serializedSize(rawStatus) > MAX_IPC_EVENT_BYTES) return
+      const status = UpdateStatusSchema.safeParse(rawStatus)
+      if (status.success) listener(status.data)
+    }
+    ipcRenderer.on(IPC_CHANNELS.updatesStatus, handler)
+    let subscribed = true
+    return () => {
+      if (!subscribed) return
+      subscribed = false
+      ipcRenderer.removeListener(IPC_CHANNELS.updatesStatus, handler)
     }
   },
   getUpdateStatus: () => invoke(IPC_CHANNELS.updatesGet, {}, IPC_RESPONSE_DATA_SCHEMAS.updatesGet),

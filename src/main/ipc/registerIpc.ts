@@ -482,8 +482,21 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
     }
   })
 
+  const unsubscribeUpdates = dependencies.updateService?.subscribe((status) => {
+    if (serializedSize(status) > MAX_IPC_EVENT_BYTES) return
+    for (const sender of senders.values()) {
+      if (sender.isDestroyed()) continue
+      try {
+        sender.send(IPC_CHANNELS.updatesStatus, status)
+      } catch {
+        // The next explicit call still returns the authoritative status.
+      }
+    }
+  })
+
   return () => {
     unsubscribe()
+    unsubscribeUpdates?.()
     for (const channel of registeredChannels) dependencies.ipcMain.removeHandler(channel)
     for (const ownerId of [...senders.keys()]) disposeOwner(ownerId)
     taskOwners.clear()

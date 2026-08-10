@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Alert, Button, Card, Checkbox, Input, Select, Spin, Steps, Tag, Typography } from 'antd'
 import type {
   AiSettings,
   ReviewFinding,
@@ -6,15 +7,10 @@ import type {
   SelectedInputFile
 } from '../../../../shared/contracts'
 import { bidSentryApi, userMessage } from '../../api/bidSentryApi'
-import { IconCompare, IconFile, IconFolder } from '../../components/icons'
-import { Notice, Stepper, formatBytes } from '../../components/ui'
 import { onSettingsChanged } from '../settings/settingsEvents'
+import { formatBytes } from '../../components/ui'
 
-const STEPS = [
-  { key: 'select', label: '选择文件' },
-  { key: 'run', label: '执行审查' },
-  { key: 'result', label: '审查结果' }
-] as const
+const STEPS = [{ title: '选择文件' }, { title: '执行审查' }, { title: '审查结果' }]
 
 const SEVERITY_LABELS: Readonly<Record<ReviewFinding['severity'], string>> = {
   error: '错误',
@@ -23,11 +19,11 @@ const SEVERITY_LABELS: Readonly<Record<ReviewFinding['severity'], string>> = {
   info: '提示'
 }
 
-const SEVERITY_TONES: Readonly<Record<ReviewFinding['severity'], string>> = {
-  error: 'badge-danger',
-  warning: 'badge-warning',
-  'needs-review': 'badge-primary',
-  info: 'badge-neutral'
+const SEVERITY_COLORS: Readonly<Record<ReviewFinding['severity'], string>> = {
+  error: 'error',
+  warning: 'warning',
+  'needs-review': 'processing',
+  info: 'default'
 }
 
 const TYPE_LABELS: Readonly<Record<ReviewFinding['type'], string>> = {
@@ -132,51 +128,35 @@ export function ReviewPage(): React.JSX.Element {
   const currentStep = result ? 2 : busy ? 1 : 0
 
   return (
-    <div className="card-stack" data-testid="review-page">
-      <Stepper steps={STEPS} current={currentStep} />
+    <div className="stack" data-testid="review-page">
+      <Steps size="small" current={currentStep} items={STEPS} style={{ maxWidth: 560 }} />
 
-      <section className="card" aria-labelledby="review-setup-title">
-        <div className="card-head">
-          <div>
-            <h2 className="card-title" id="review-setup-title">
-              选择文件与审查参数
-            </h2>
-            <p className="card-sub">
-              先选招标文件，再选投标文件；文件只在本机读取，审查报告保存到投标文件所在目录。
-            </p>
-          </div>
-          <span className="badge badge-neutral">本机规则优先</span>
-        </div>
-
-        <div className="card-stack">
+      <Card title="选择文件与审查参数">
+        <div className="stack">
           <div className="dropzone">
-            <span className="dropzone-icon" aria-hidden="true">
-              <IconCompare size={22} />
-            </span>
             <div className="dropzone-text">
               <p className="dropzone-title">一次选择招标文件和投标文件</p>
               <p className="dropzone-desc">
-                选中后在下方分别指定角色；同一份文件不能同时作为双方。
+                选中后在下方分别指定角色；报告保存到投标文件所在目录。
               </p>
             </div>
-            <button
-              className="btn btn-primary"
-              type="button"
+            <Button
+              type="primary"
               data-testid="review-select-files"
               onClick={() => void chooseFiles()}
               disabled={busy}
             >
               {files.length ? '重新选择文件' : '选择文件'}
-            </button>
+            </Button>
           </div>
 
           {files.length > 0 ? (
             <ul className="file-list" aria-label="已选择的文件">
               {files.map((file) => (
                 <li className="file-row" key={file.inputId}>
-                  <span className={`file-tag file-tag-${file.documentType}`}>
+                  <Tag color={file.documentType === 'docx' ? 'geekblue' : 'volcano'}>
                     {file.documentType}
-                  </span>
+                  </Tag>
                   <span className="file-name" title={file.displayName}>
                     {file.displayName}
                   </span>
@@ -186,126 +166,86 @@ export function ReviewPage(): React.JSX.Element {
             </ul>
           ) : null}
 
-          <div className="form-grid">
-            <label className="field">
-              <span className="field-label">
-                招标文件<span className="req">*</span>
-              </span>
-              <select
-                className="select"
-                value={tenderId}
-                onChange={(event) => setTenderId(event.currentTarget.value)}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: 12
+            }}
+          >
+            <label className="field-block">
+              <span className="field-label">招标文件 *</span>
+              <Select
+                style={{ width: '100%' }}
+                value={tenderId || undefined}
+                placeholder="请选择"
+                aria-label="招标文件"
+                onChange={(value) => setTenderId(value ?? '')}
                 disabled={busy || files.length === 0}
-              >
-                <option value="">请选择</option>
-                {files.map((file) => (
-                  <option key={file.inputId} value={file.inputId}>
-                    {file.displayName}
-                  </option>
-                ))}
-              </select>
+                options={files.map((file) => ({ value: file.inputId, label: file.displayName }))}
+              />
             </label>
-            <label className="field">
-              <span className="field-label">
-                投标文件<span className="req">*</span>
-              </span>
-              <select
-                className="select"
-                value={bidId}
-                onChange={(event) => setBidId(event.currentTarget.value)}
+            <label className="field-block">
+              <span className="field-label">投标文件 *</span>
+              <Select
+                style={{ width: '100%' }}
+                value={bidId || undefined}
+                placeholder="请选择"
+                aria-label="投标文件"
+                onChange={(value) => setBidId(value ?? '')}
                 disabled={busy || files.length === 0}
-              >
-                <option value="">请选择</option>
-                {files.map((file) => (
-                  <option key={file.inputId} value={file.inputId}>
-                    {file.displayName}
-                  </option>
-                ))}
-              </select>
+                options={files.map((file) => ({ value: file.inputId, label: file.displayName }))}
+              />
             </label>
-            <label className="field span-2">
-              <span className="field-label">
-                投标单位名称<span className="req">*</span>
-              </span>
-              <input
-                className="input"
+            <label className="field-block" style={{ gridColumn: '1 / -1' }}>
+              <span className="field-label">投标单位名称 *</span>
+              <Input
                 value={bidderName}
                 onChange={(event) => setBidderName(event.currentTarget.value)}
-                placeholder="用于核对投标文件中出现的单位名称，例如：示例建设有限公司"
+                placeholder="与投标文件盖章、落款使用的全称保持一致"
                 disabled={busy}
               />
-              <span className="field-hint">与投标文件盖章、落款使用的全称保持一致。</span>
             </label>
           </div>
 
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={aiConfirmed}
-              onChange={(event) => setAiConfirmed(event.currentTarget.checked)}
-              disabled={busy}
-            />
-            <span>
-              <span className="check-title">允许使用已配置的 AI 接口辅助审查</span>
-              <span className="check-hint">
-                仅发送双方必要的文本片段（每份最多约 7,000 字节，单次请求不超过 256 KiB）；AI
-                结论一律降级为「需人工复核」，不会修改任何文件。
+          <Checkbox
+            checked={aiConfirmed}
+            onChange={(event) => setAiConfirmed(event.target.checked)}
+            disabled={busy}
+          >
+            允许使用已配置的 AI 接口辅助审查
+            {aiConfirmed && aiSettings ? (
+              <span className="muted text-sm" style={{ marginLeft: 8 }}>
+                发送目标：{safeHost(aiSettings.baseUrl)} · 模型：{aiSettings.model}
               </span>
-              {aiConfirmed && aiSettings ? (
-                <span className="check-hint">
-                  发送目标：{safeHost(aiSettings.baseUrl)} · 模型：{aiSettings.model}
-                </span>
-              ) : null}
-            </span>
-          </label>
+            ) : null}
+          </Checkbox>
 
-          <p className="output-line">
-            <IconFolder />
-            <span>报告位置：与投标文件同目录（无需选择输出目录）</span>
-          </p>
+          {error ? <Alert type="error" showIcon title="审查未完成" description={error} /> : null}
 
-          {error ? (
-            <Notice tone="danger" title="审查未完成">
-              {error}
-            </Notice>
-          ) : null}
-
-          <div className="btn-row is-between">
-            <span className="btn-note">
-              {busy ? '正在解析与审查，可随时取消。' : '审查过程不会修改任何文件。'}
-            </span>
-            <div className="btn-row">
-              {busy ? (
-                <button
-                  className="btn btn-danger"
-                  type="button"
-                  data-testid="review-cancel"
-                  onClick={() => void cancel()}
-                >
-                  取消审查
-                </button>
-              ) : null}
-              <button
-                className="btn btn-primary"
-                type="button"
-                data-testid="review-run"
-                onClick={() => void run()}
-                disabled={!canRun}
-              >
-                {busy ? '正在审查…' : '开始审查'}
-              </button>
-            </div>
+          <div className="actions">
+            {busy ? (
+              <Button danger data-testid="review-cancel" onClick={() => void cancel()}>
+                取消审查
+              </Button>
+            ) : null}
+            <Button
+              type="primary"
+              data-testid="review-run"
+              onClick={() => void run()}
+              disabled={!canRun}
+              loading={busy}
+            >
+              {busy ? '正在审查…' : '开始审查'}
+            </Button>
           </div>
         </div>
-      </section>
+      </Card>
 
       {busy ? (
-        <section className="card" aria-live="polite">
-          <p className="loading-line">
-            <span className="spinner" aria-hidden="true" />
-            正在对照招标文件核查投标文件…
-          </p>
-        </section>
+        <Card>
+          <Spin /> <span className="muted text-sm">正在对照招标文件核查投标文件…</span>
+        </Card>
       ) : null}
 
       {result ? (
@@ -336,132 +276,138 @@ function ReviewResultPanel({
       (source === 'all' || finding.source === source)
   )
   return (
-    <section className="card" aria-labelledby="review-result-title">
-      <div className="card-head">
-        <div>
-          <h2 className="card-title" id="review-result-title">
-            审查结果
-          </h2>
-          <p className="card-sub">请逐条人工复核；报告文件已保存到投标文件所在目录。</p>
+    <Card
+      title={<h2 style={{ margin: 0, fontSize: 16 }}>审查结果</h2>}
+      extra={
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Tag color="default">全部 {result.report.findings.length}</Tag>
+          <Tag color="processing">本机规则 {result.report.deterministicCount}</Tag>
+          <Tag color="warning">AI 辅助 {result.report.aiCount}</Tag>
         </div>
-        <span className="badge badge-success">已生成报告</span>
-      </div>
-
-      <div className="card-stack">
-        <div className="stat-row" aria-label="结果统计">
-          <span className="stat-chip">
-            全部发现 <strong>{result.report.findings.length}</strong>
-          </span>
-          <span className="stat-chip">
-            确定性规则 <strong>{result.report.deterministicCount}</strong>
-          </span>
-          <span className="stat-chip">
-            AI 辅助 <strong>{result.report.aiCount}</strong>
-          </span>
-        </div>
-
-        <div className="form-grid">
-          <label className="field">
-            <span className="field-label">按严重程度筛选</span>
-            <select
-              className="select"
-              value={severity}
-              onChange={(event) => setSeverity(event.currentTarget.value)}
-            >
-              <option value="all">全部</option>
-              <option value="error">错误</option>
-              <option value="warning">警告</option>
-              <option value="needs-review">需人工复核</option>
-              <option value="info">提示</option>
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">按来源筛选</span>
-            <select
-              className="select"
-              value={source}
-              onChange={(event) => setSource(event.currentTarget.value)}
-            >
-              <option value="all">全部</option>
-              <option value="deterministic">本机规则</option>
-              <option value="ai">AI 辅助</option>
-            </select>
-          </label>
+      }
+    >
+      <div className="stack">
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <Select
+            size="small"
+            style={{ width: 160 }}
+            value={severity}
+            onChange={setSeverity}
+            aria-label="按严重程度筛选"
+            options={[
+              { value: 'all', label: '全部严重程度' },
+              { value: 'error', label: '错误' },
+              { value: 'warning', label: '警告' },
+              { value: 'needs-review', label: '需人工复核' },
+              { value: 'info', label: '提示' }
+            ]}
+          />
+          <Select
+            size="small"
+            style={{ width: 140 }}
+            value={source}
+            onChange={setSource}
+            aria-label="按来源筛选"
+            options={[
+              { value: 'all', label: '全部来源' },
+              { value: 'deterministic', label: '本机规则' },
+              { value: 'ai', label: 'AI 辅助' }
+            ]}
+          />
         </div>
 
         {findings.length ? (
-          <div className="card-stack" aria-label="发现列表">
+          <div className="stack" aria-label="发现列表">
             {findings.map((finding) => (
-              <article
-                className={`finding sev-${finding.severity}`}
-                key={finding.id}
-                data-testid="review-finding"
-              >
-                <div className="finding-head">
-                  <span className={`badge ${SEVERITY_TONES[finding.severity]}`}>
-                    {SEVERITY_LABELS[finding.severity]}
-                  </span>
-                  <span className="badge badge-neutral">{TYPE_LABELS[finding.type]}</span>
-                  <span className="finding-meta">
-                    {finding.source === 'ai' ? 'AI 辅助' : '本机规则'} · 置信度{' '}
-                    {Math.round(finding.confidence * 100)}%
-                  </span>
-                </div>
-                <p className="finding-summary">{finding.summary}</p>
-                {finding.suggestion ? <p className="muted text-sm">{finding.suggestion}</p> : null}
-                <div className="finding-evidence">
-                  <div>
-                    <span className="finding-meta">招标文件依据</span>
-                    {finding.tenderEvidence.length ? (
-                      finding.tenderEvidence.map((evidence) => (
-                        <blockquote key={`t-${evidence.nodeId}`}>{evidence.excerpt}</blockquote>
-                      ))
-                    ) : (
-                      <blockquote>无直接引用</blockquote>
-                    )}
+              <Card size="small" key={finding.id} data-testid="review-finding">
+                <div className="stack" style={{ gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Tag color={SEVERITY_COLORS[finding.severity]}>
+                      {SEVERITY_LABELS[finding.severity]}
+                    </Tag>
+                    <Tag>{TYPE_LABELS[finding.type]}</Tag>
+                    <span className="muted text-sm">
+                      {finding.source === 'ai' ? 'AI 辅助' : '本机规则'} · 置信度{' '}
+                      {Math.round(finding.confidence * 100)}%
+                    </span>
                   </div>
-                  <div>
-                    <span className="finding-meta">投标文件内容</span>
-                    {finding.bidEvidence.length ? (
-                      finding.bidEvidence.map((evidence) => (
-                        <blockquote key={`b-${evidence.nodeId}`}>{evidence.excerpt}</blockquote>
-                      ))
-                    ) : (
-                      <blockquote>无直接引用</blockquote>
-                    )}
+                  <span style={{ fontWeight: 500 }}>{finding.summary}</span>
+                  {finding.suggestion ? (
+                    <span className="muted text-sm">{finding.suggestion}</span>
+                  ) : null}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                      gap: 10
+                    }}
+                  >
+                    <EvidenceBlock title="招标文件依据" evidence={finding.tenderEvidence} />
+                    <EvidenceBlock title="投标文件内容" evidence={finding.bidEvidence} />
                   </div>
                 </div>
-              </article>
+              </Card>
             ))}
           </div>
         ) : (
-          <Notice tone="info">当前筛选条件下没有发现；仍请人工检查完整文件。</Notice>
+          <Alert type="info" showIcon title="当前筛选条件下没有发现；仍请人工检查完整文件。" />
         )}
 
-        <div className="card-stack">
-          <p className="muted text-sm">
-            报告文件：{result.jsonReport} · {result.htmlReport}
-          </p>
-          <div className="btn-row">
-            {result.files.map((file) => (
-              <button
-                className="btn btn-secondary btn-sm"
-                type="button"
-                key={file.fileId}
-                aria-label={`在文件夹中显示 ${file.displayName}`}
-                onClick={() => void bidSentryApi.showResultInFolder(file.fileId)}
-              >
-                <IconFile size={14} />
-                {file.displayName}
-              </button>
-            ))}
-            <button className="btn btn-ghost btn-sm" type="button" onClick={onRestart}>
-              开始新的审查
-            </button>
-          </div>
+        <Typography.Text type="secondary" style={{ fontSize: 12.5 }}>
+          报告文件：{result.jsonReport} · {result.htmlReport}
+        </Typography.Text>
+        <div className="actions" style={{ justifyContent: 'flex-start' }}>
+          {result.files.map((file) => (
+            <Button
+              size="small"
+              key={file.fileId}
+              aria-label={`在文件夹中显示 ${file.displayName}`}
+              onClick={() => void bidSentryApi.showResultInFolder(file.fileId)}
+            >
+              {file.displayName}
+            </Button>
+          ))}
+          <Button type="text" size="small" onClick={onRestart}>
+            开始新的审查
+          </Button>
         </div>
       </div>
-    </section>
+    </Card>
+  )
+}
+
+function EvidenceBlock({
+  title,
+  evidence
+}: {
+  title: string
+  evidence: readonly { nodeId: string; excerpt: string }[]
+}): React.JSX.Element {
+  return (
+    <div>
+      <div className="muted text-sm" style={{ marginBottom: 4 }}>
+        {title}
+      </div>
+      {evidence.length ? (
+        evidence.map((item) => (
+          <blockquote
+            key={item.nodeId}
+            style={{
+              margin: '0 0 6px',
+              padding: '6px 10px',
+              borderLeft: '3px solid #dfe3ea',
+              background: '#f7f8fa',
+              fontSize: 12.5,
+              userSelect: 'text'
+            }}
+          >
+            {item.excerpt}
+          </blockquote>
+        ))
+      ) : (
+        <span className="muted text-sm">无直接引用</span>
+      )}
+    </div>
   )
 }
 

@@ -22,6 +22,7 @@ export const UpdateStatusSchema = z
     releaseUrl: z.string().url().max(2_048).optional(),
     assetName: z.string().trim().min(1).max(255).optional(),
     downloadedPathId: z.string().uuid().optional(),
+    downloadPercent: z.number().min(0).max(100).optional(),
     packageType: z.enum(['appimage', 'nsis', 'manual-only']).optional(),
     signatureStatus: z.enum(['unsigned', 'signed', 'unknown']).optional(),
     message: z.string().trim().min(1).max(500).optional()

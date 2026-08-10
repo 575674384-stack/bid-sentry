@@ -27,8 +27,12 @@ export function useUpdateStatus(): UpdateController {
       .catch((reason: unknown) => {
         if (active) setError(userMessage(reason))
       })
+    const unsubscribe = bidSentryApi.onUpdateStatus((value) => {
+      if (active) setStatus(value)
+    })
     return () => {
       active = false
+      unsubscribe()
     }
   }, [])
 

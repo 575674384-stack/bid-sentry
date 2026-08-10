@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Alert, Button, Card, Input, Radio, Spin, Switch, Typography } from 'antd'
 import {
   AiSettingsUpdateSchema,
   DEFAULT_OUTPUT_SUFFIX,
@@ -8,7 +9,6 @@ import {
 } from '../../../../shared/contracts'
 import { useSettings, type SettingsController } from './useSettings'
 import { UpdatePanel } from '../updates/UpdateStatus'
-import { Notice } from '../../components/ui'
 import { bidSentryApi } from '../../api/bidSentryApi'
 
 const EMPTY_PROFILE: CompanyProfile = {
@@ -27,20 +27,20 @@ export function SettingsPage(): React.JSX.Element {
 
   if (controller.loading) {
     return (
-      <section className="card" aria-live="polite">
-        <div className="loading-line" />
-        <p className="muted text-sm">正在读取本机设置…</p>
-      </section>
+      <Card>
+        <Spin /> <span className="muted text-sm">正在读取本机设置…</span>
+      </Card>
     )
   }
 
   if (!controller.settings) {
     return (
-      <section className="card" role="alert">
-        <Notice tone="danger" title="无法读取本机设置">
-          {controller.errorMessage ?? '请重新启动应用后重试。'}
-        </Notice>
-      </section>
+      <Alert
+        type="error"
+        showIcon
+        title="无法读取本机设置"
+        description={controller.errorMessage ?? '请重新启动应用后重试。'}
+      />
     )
   }
 
@@ -128,377 +128,301 @@ function SettingsForm({
     settings.secretPersistence === 'encrypted' ? '系统加密保存' : '仅当前会话使用'
 
   return (
-    <form className="settings-grid" onSubmit={(event) => void save(event)}>
-      <section className="card" aria-labelledby="settings-ai-title">
-        <div className="card-head">
-          <div>
-            <h2 className="card-title" id="settings-ai-title">
-              连接设置
-            </h2>
-            <p className="card-sub">OpenAI 兼容接口；远程必须使用 HTTPS，本机环回可使用 HTTP。</p>
+    <form className="stack" onSubmit={(event) => void save(event)}>
+      <Card title={<h2 style={{ margin: 0, fontSize: 16 }}>连接设置</h2>}>
+        <div className="stack">
+          <div className="form-grid-2">
+            <label className="field-block" style={{ gridColumn: '1 / -1' }}>
+              <span className="field-label">Base URL</span>
+              <Input
+                value={baseUrl}
+                onChange={(event) => setBaseUrl(event.currentTarget.value)}
+                placeholder="https://api.example.com/v1"
+                required
+                disabled={busy}
+              />
+              <span className="muted text-sm">远程接口必须使用 HTTPS，本机环回可使用 HTTP。</span>
+            </label>
+
+            <label className="field-block">
+              <span className="field-label">模型名称</span>
+              <Input
+                value={model}
+                onChange={(event) => setModel(event.currentTarget.value)}
+                placeholder="gpt-5-mini"
+                maxLength={200}
+                required
+                disabled={busy}
+                spellCheck={false}
+              />
+            </label>
+
+            <label className="field-block">
+              <span className="field-label">超时时间（秒）</span>
+              <Input
+                type="number"
+                value={timeoutSeconds}
+                onChange={(event) => setTimeoutSeconds(event.currentTarget.value)}
+                min={5}
+                max={120}
+                step={1}
+                required
+                disabled={busy}
+              />
+            </label>
+
+            <label className="field-block">
+              <span className="field-label">最大并发</span>
+              <Radio.Group
+                value={maxConcurrency}
+                onChange={(event) => setMaxConcurrency(String(event.target.value))}
+                disabled={busy}
+                optionType="button"
+                buttonStyle="solid"
+                size="small"
+                options={[
+                  { value: '1', label: '1（推荐）' },
+                  { value: '2', label: '2' },
+                  { value: '3', label: '3' },
+                  { value: '4', label: '4' }
+                ]}
+              />
+            </label>
+
+            <label className="field-block" style={{ gridColumn: '1 / -1' }}>
+              <span className="field-label">API Key</span>
+              <Input.Password
+                value={apiKey}
+                onChange={(event) => {
+                  setApiKey(event.currentTarget.value)
+                  if (event.currentTarget.value) setClearApiKey(false)
+                }}
+                placeholder={
+                  controller.settings?.hasApiKey ? '已保存；留空则保持不变' : '输入你的 API Key'
+                }
+                maxLength={8_192}
+                disabled={busy || clearApiKey}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <span className="muted text-sm">
+                当前状态：{controller.settings?.hasApiKey ? '已保存' : '未保存'} ·{' '}
+                {persistenceLabel}
+              </span>
+            </label>
           </div>
-          <span className="badge badge-neutral">Key 不会回显</span>
-        </div>
 
-        <div className="form-grid">
-          <label className="field span-2">
-            <span className="field-label">Base URL</span>
-            <input
-              className="input"
-              type="url"
-              value={baseUrl}
-              onChange={(event) => setBaseUrl(event.currentTarget.value)}
-              placeholder="https://api.example.com/v1"
-              required
-              disabled={busy}
-            />
-            <span className="field-hint">远程接口必须使用 HTTPS；本机环回地址可使用 HTTP。</span>
-          </label>
-
-          <label className="field span-2">
-            <span className="field-label">模型名称</span>
-            <input
-              className="input"
-              type="text"
-              value={model}
-              onChange={(event) => setModel(event.currentTarget.value)}
-              placeholder="gpt-5-mini"
-              maxLength={200}
-              required
-              disabled={busy}
-              spellCheck={false}
-            />
-          </label>
-
-          <label className="field">
-            <span className="field-label">超时时间（秒）</span>
-            <input
-              className="input"
-              type="number"
-              value={timeoutSeconds}
-              onChange={(event) => setTimeoutSeconds(event.currentTarget.value)}
-              min={5}
-              max={120}
-              step={1}
-              required
-              disabled={busy}
-            />
-          </label>
-
-          <label className="field">
-            <span className="field-label">最大并发</span>
-            <select
-              className="select"
-              value={maxConcurrency}
-              onChange={(event) => setMaxConcurrency(event.currentTarget.value)}
-              disabled={busy}
-            >
-              <option value="1">1（推荐）</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-            </select>
-          </label>
-
-          <label className="field span-2">
-            <span className="field-label">API Key</span>
-            <input
-              className="input"
-              type="password"
-              value={apiKey}
-              onChange={(event) => {
-                setApiKey(event.currentTarget.value)
-                if (event.currentTarget.value) setClearApiKey(false)
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Switch
+              size="small"
+              checked={clearApiKey}
+              onChange={(checked) => {
+                setClearApiKey(checked)
+                if (checked) setApiKey('')
               }}
-              placeholder={
-                controller.settings?.hasApiKey ? '已保存；留空则保持不变' : '输入你的 API Key'
-              }
-              maxLength={8_192}
-              disabled={busy || clearApiKey}
-              autoComplete="off"
-              spellCheck={false}
+              disabled={busy || !settings.hasApiKey}
             />
-            <span className="field-hint">
-              当前状态：{controller.settings?.hasApiKey ? '已保存' : '未保存'} · {persistenceLabel}
-            </span>
+            <span className="text-sm">保存时清除已保存的 API Key</span>
           </label>
         </div>
+      </Card>
 
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={clearApiKey}
-            onChange={(event) => {
-              setClearApiKey(event.currentTarget.checked)
-              if (event.currentTarget.checked) setApiKey('')
-            }}
-            disabled={busy || !settings.hasApiKey}
+      <Card title={<h2 style={{ margin: 0, fontSize: 16 }}>输出</h2>}>
+        <div className="stack">
+          <Radio.Group
+            value={outputMode}
+            onChange={(event) => setOutputMode(event.target.value as 'suffix' | 'overwrite')}
+            disabled={busy}
+            style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+            options={[
+              {
+                value: 'suffix',
+                label: '另存为「原文件名 + 后缀」（推荐；同名自动追加序号）'
+              },
+              { value: 'overwrite', label: '覆盖原文件（验证通过后原子替换，失败自动回滚）' }
+            ]}
           />
-          <span>
-            <span className="check-title">保存时清除已保存的 API Key</span>
-          </span>
-        </label>
-      </section>
-
-      <section className="card" aria-labelledby="settings-output-title">
-        <div className="card-head">
-          <div>
-            <h2 className="card-title" id="settings-output-title">
-              输出设置
-            </h2>
-            <p className="card-sub">
-              清洗结果始终保存在原文件所在目录；你决定是追加后缀另存，还是直接覆盖原文件。
-            </p>
-          </div>
-          <span className="badge badge-neutral">原文件只读</span>
+          {outputMode === 'overwrite' ? (
+            <Alert
+              type="warning"
+              showIcon
+              title="覆盖后原文件不可恢复；会先备份原文件字节，任何一步失败都会自动还原。"
+            />
+          ) : (
+            <label className="field-block" style={{ maxWidth: 320 }}>
+              <span className="field-label">文件后缀</span>
+              <Input
+                value={outputSuffix}
+                onChange={(event) => setOutputSuffix(event.currentTarget.value)}
+                placeholder={DEFAULT_OUTPUT_SUFFIX}
+                maxLength={50}
+                disabled={busy}
+                spellCheck={false}
+              />
+              <span className="muted text-sm">
+                例如 `投标文件.docx` → `投标文件{DEFAULT_OUTPUT_SUFFIX}.docx`
+              </span>
+            </label>
+          )}
+          <span className="muted text-sm">清洗结果始终保存在原文件所在目录。</span>
         </div>
+      </Card>
 
-        <div className="form-grid">
-          <label className="field span-2">
-            <span className="field-label">输出方式</span>
-            <select
-              className="select"
-              value={outputMode}
-              onChange={(event) =>
-                setOutputMode(event.currentTarget.value as 'suffix' | 'overwrite')
-              }
-              disabled={busy}
-            >
-              <option value="suffix">另存为「原文件名 + 后缀」的新文件（推荐）</option>
-              <option value="overwrite">覆盖原文件（验证通过后原子替换，失败会回滚）</option>
-            </select>
-            <span className="field-hint">
-              {outputMode === 'suffix'
-                ? '同名文件已存在时自动追加 (2)、(3) 序号，不会覆盖任何现有文件。'
-                : '会先备份原文件字节，任何一步失败都会自动恢复原文件。'}
-            </span>
-          </label>
-
-          <label className="field span-2">
-            <span className="field-label">文件后缀</span>
-            <input
-              className="input"
-              type="text"
-              value={outputSuffix}
-              onChange={(event) => setOutputSuffix(event.currentTarget.value)}
-              placeholder={DEFAULT_OUTPUT_SUFFIX}
-              maxLength={50}
-              disabled={busy || outputMode === 'overwrite'}
-              spellCheck={false}
-            />
-            <span className="field-hint">
-              例如「{DEFAULT_OUTPUT_SUFFIX}」：`投标文件.docx` → `投标文件{DEFAULT_OUTPUT_SUFFIX}
-              .docx`。
-            </span>
-          </label>
+      <Card title={<h2 style={{ margin: 0, fontSize: 16 }}>公司资料</h2>}>
+        <div className="form-grid-2">
+          <ProfileInput
+            label="投标单位名称"
+            span2
+            value={profile.bidderName}
+            maxLength={300}
+            disabled={busy}
+            onChange={(value) => setProfileField('bidderName', value)}
+          />
+          <ProfileInput
+            label="统一社会信用代码"
+            value={profile.unifiedSocialCreditCode}
+            maxLength={100}
+            disabled={busy}
+            onChange={(value) => setProfileField('unifiedSocialCreditCode', value)}
+          />
+          <ProfileInput
+            label="联系电话"
+            value={profile.phone}
+            maxLength={100}
+            disabled={busy}
+            onChange={(value) => setProfileField('phone', value)}
+          />
+          <ProfileInput
+            label="电子邮箱"
+            value={profile.email}
+            maxLength={200}
+            disabled={busy}
+            onChange={(value) => setProfileField('email', value)}
+          />
+          <ProfileInput
+            label="法定代表人"
+            value={profile.legalRepresentative}
+            maxLength={100}
+            disabled={busy}
+            onChange={(value) => setProfileField('legalRepresentative', value)}
+          />
+          <ProfileInput
+            label="授权代表"
+            value={profile.authorizedRepresentative}
+            maxLength={100}
+            disabled={busy}
+            onChange={(value) => setProfileField('authorizedRepresentative', value)}
+          />
+          <ProfileInput
+            label="联系人"
+            value={profile.contact}
+            maxLength={100}
+            disabled={busy}
+            onChange={(value) => setProfileField('contact', value)}
+          />
+          <ProfileInput
+            label="注册地址"
+            span2
+            value={profile.address}
+            maxLength={500}
+            disabled={busy}
+            onChange={(value) => setProfileField('address', value)}
+          />
         </div>
-      </section>
+        <Typography.Text type="secondary" style={{ fontSize: 12.5 }}>
+          用于预填资格标表单，只保存在本机。
+        </Typography.Text>
+      </Card>
 
-      <section className="card" aria-labelledby="settings-profile-title">
-        <div className="card-head">
-          <div>
-            <h2 className="card-title" id="settings-profile-title">
-              公司资料
-            </h2>
-            <p className="card-sub">
-              用于在资格标预制作时预填表单；只保存在本机，不会写入任何输出文件。
-            </p>
-          </div>
-          <span className="badge badge-neutral">仅本机保存</span>
-        </div>
-
-        <div className="form-grid">
-          <label className="field span-2">
-            <span className="field-label">投标单位名称</span>
-            <input
-              className="input"
-              type="text"
-              value={profile.bidderName}
-              onChange={(event) => setProfileField('bidderName', event.currentTarget.value)}
-              maxLength={300}
-              disabled={busy}
-            />
+      <Card title={<h2 style={{ margin: 0, fontSize: 16 }}>桌面</h2>}>
+        <div className="stack">
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Switch size="small" checked={closeToTray} onChange={setCloseToTray} disabled={busy} />
+            <span className="text-sm">关闭窗口时最小化到系统托盘</span>
           </label>
-          <label className="field">
-            <span className="field-label">统一社会信用代码</span>
-            <input
-              className="input"
-              type="text"
-              value={profile.unifiedSocialCreditCode}
-              onChange={(event) =>
-                setProfileField('unifiedSocialCreditCode', event.currentTarget.value)
-              }
-              maxLength={100}
-              disabled={busy}
-              spellCheck={false}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">联系电话</span>
-            <input
-              className="input"
-              type="text"
-              value={profile.phone}
-              onChange={(event) => setProfileField('phone', event.currentTarget.value)}
-              maxLength={100}
-              disabled={busy}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">电子邮箱</span>
-            <input
-              className="input"
-              type="email"
-              value={profile.email}
-              onChange={(event) => setProfileField('email', event.currentTarget.value)}
-              maxLength={200}
-              disabled={busy}
-            />
-          </label>
-          <label className="field span-2">
-            <span className="field-label">注册地址</span>
-            <input
-              className="input"
-              type="text"
-              value={profile.address}
-              onChange={(event) => setProfileField('address', event.currentTarget.value)}
-              maxLength={500}
-              disabled={busy}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">法定代表人</span>
-            <input
-              className="input"
-              type="text"
-              value={profile.legalRepresentative}
-              onChange={(event) =>
-                setProfileField('legalRepresentative', event.currentTarget.value)
-              }
-              maxLength={100}
-              disabled={busy}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">授权代表</span>
-            <input
-              className="input"
-              type="text"
-              value={profile.authorizedRepresentative}
-              onChange={(event) =>
-                setProfileField('authorizedRepresentative', event.currentTarget.value)
-              }
-              maxLength={100}
-              disabled={busy}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">联系人</span>
-            <input
-              className="input"
-              type="text"
-              value={profile.contact}
-              onChange={(event) => setProfileField('contact', event.currentTarget.value)}
-              maxLength={100}
-              disabled={busy}
-            />
-          </label>
-        </div>
-      </section>
-
-      <section className="card" aria-labelledby="settings-desktop-title">
-        <div className="card-head">
-          <div>
-            <h2 className="card-title" id="settings-desktop-title">
-              桌面行为
-            </h2>
-            <p className="card-sub">应用在本机运行时的窗口与更新行为。</p>
-          </div>
-        </div>
-
-        <div className="card-stack">
-          <label className="switch">
-            <span className="switch-text">
-              <span className="check-title">关闭窗口时最小化到系统托盘</span>
-              <span className="check-hint">默认关闭；托盘菜单可显示窗口、检查更新或退出。</span>
-            </span>
-            <input
-              type="checkbox"
-              checked={closeToTray}
-              onChange={(event) => setCloseToTray(event.currentTarget.checked)}
-              disabled={busy}
-            />
-            <span className="switch-track" aria-hidden="true" />
-          </label>
-          <label className="switch">
-            <span className="switch-text">
-              <span className="check-title">启动后检查 GitHub Releases 更新</span>
-              <span className="check-hint">只检查不自动下载；下载和安装都需要你手动确认。</span>
-            </span>
-            <input
-              type="checkbox"
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Switch
+              size="small"
               checked={checkUpdatesOnStartup}
-              onChange={(event) => setCheckUpdatesOnStartup(event.currentTarget.checked)}
+              onChange={setCheckUpdatesOnStartup}
               disabled={busy}
             />
-            <span className="switch-track" aria-hidden="true" />
+            <span className="text-sm">启动后检查 GitHub Releases 更新</span>
           </label>
         </div>
-      </section>
+      </Card>
 
-      <section className="card" aria-labelledby="settings-update-title">
-        <div className="card-head">
+      <Card title={<h2 style={{ margin: 0, fontSize: 16 }}>更新与诊断</h2>}>
+        <div className="stack">
+          <UpdatePanel />
           <div>
-            <h2 className="card-title" id="settings-update-title">
-              更新与诊断
-            </h2>
-            <p className="card-sub">仅访问官方 GitHub Releases；错误日志只记录脱敏阶段与编号。</p>
+            <Button type="text" onClick={() => void bidSentryApi.openDiagnosticsDirectory()}>
+              打开诊断目录
+            </Button>
           </div>
         </div>
-        <UpdatePanel />
-        <div className="btn-row">
-          <button
-            className="btn btn-ghost"
-            type="button"
-            onClick={() => void bidSentryApi.openDiagnosticsDirectory()}
-          >
-            打开诊断目录
-          </button>
-        </div>
-      </section>
+      </Card>
 
       {validationMessage || controller.errorMessage ? (
-        <Notice tone="danger" title="设置未生效">
-          {validationMessage ?? controller.errorMessage}
-        </Notice>
+        <Alert
+          type="error"
+          showIcon
+          title="设置未生效"
+          description={validationMessage ?? controller.errorMessage}
+        />
       ) : null}
 
       {controller.connectionResult ? (
-        <Notice
-          tone={controller.connectionResult.ok ? 'success' : 'warning'}
+        <Alert
+          type={controller.connectionResult.ok ? 'success' : 'warning'}
+          showIcon
           title={controller.connectionResult.ok ? '连接成功' : '连接未通过'}
-        >
-          {controller.connectionResult.message}
-          {controller.connectionResult.ok && controller.connectionResult.modelCount !== undefined
-            ? ` 已读取 ${controller.connectionResult.modelCount} 个模型。`
-            : ''}
-        </Notice>
+          description={`${controller.connectionResult.message}${
+            controller.connectionResult.ok && controller.connectionResult.modelCount !== undefined
+              ? ` 已读取 ${controller.connectionResult.modelCount} 个模型。`
+              : ''
+          }`}
+        />
       ) : null}
 
-      <div className="btn-row is-between">
-        <button
-          className="btn btn-secondary"
-          type="button"
-          onClick={() => void testConnection()}
-          disabled={busy}
-        >
+      <div className="actions" style={{ justifyContent: 'space-between' }}>
+        <Button onClick={() => void testConnection()} disabled={busy} loading={controller.testing}>
           {controller.testing ? '正在测试…' : '测试连接'}
-        </button>
-        <button className="btn btn-primary" type="submit" disabled={busy}>
+        </Button>
+        <Button type="primary" htmlType="submit" disabled={busy} loading={controller.saving}>
           {controller.saving ? '正在保存…' : '保存设置'}
-        </button>
+        </Button>
       </div>
     </form>
+  )
+}
+
+function ProfileInput({
+  label,
+  value,
+  maxLength,
+  span2,
+  disabled,
+  onChange
+}: {
+  label: string
+  value: string
+  maxLength: number
+  span2?: boolean
+  disabled: boolean
+  onChange(value: string): void
+}): React.JSX.Element {
+  return (
+    <label className="field-block" style={span2 ? { gridColumn: '1 / -1' } : undefined}>
+      <span className="field-label">{label}</span>
+      <Input
+        value={value}
+        maxLength={maxLength}
+        disabled={disabled}
+        spellCheck={false}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+    </label>
   )
 }
 

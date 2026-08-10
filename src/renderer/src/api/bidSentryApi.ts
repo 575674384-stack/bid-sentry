@@ -47,6 +47,7 @@ interface RendererBridge {
   cancelTask(taskId: string): Promise<unknown>
   showResultInFolder(fileId: string): Promise<unknown>
   onTaskProgress(listener: (progress: unknown) => void): () => void
+  onUpdateStatus(listener: (status: unknown) => void): () => void
   getUpdateStatus(): Promise<unknown>
   checkUpdates(): Promise<unknown>
   downloadUpdate(): Promise<unknown>
@@ -102,6 +103,9 @@ export const bidSentryApi = Object.freeze({
   },
   onTaskProgress(listener: (progress: TaskProgress) => void): () => void {
     return bridge().onTaskProgress((rawProgress) => listener(TaskProgressSchema.parse(rawProgress)))
+  },
+  onUpdateStatus(listener: (status: UpdateStatus) => void): () => void {
+    return bridge().onUpdateStatus((rawStatus) => listener(UpdateStatusSchema.parse(rawStatus)))
   },
   getUpdateStatus(): Promise<UpdateStatus> {
     return invoke(() => bridge().getUpdateStatus(), UpdateStatusSchema)

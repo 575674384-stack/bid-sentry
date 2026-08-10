@@ -30,6 +30,7 @@ export interface NativeUpdaterLike {
   checkForUpdates(): Promise<{ updateInfo?: { version?: string; releaseNotes?: string | null } }>
   downloadUpdate(): Promise<unknown>
   quitAndInstall(): void
+  on?(event: 'download-progress', listener: (progress: { percent: number }) => void): void
 }
 
 export interface UpdateServiceOptions {
@@ -56,6 +57,7 @@ export class UpdateService {
   #release: ReleaseResponse | null = null
   #downloadedPath: string | null = null
   #checkPromise: Promise<UpdateStatus> | null = null
+  readonly #listeners = new Set<(status: UpdateStatus) => void>()
 
   constructor(options: UpdateServiceOptions) {
     this.#currentVersion = options.currentVersion
@@ -85,6 +87,14 @@ export class UpdateService {
     return this.#status
   }
 
+  /** Live status push (checking/downloading percent/state changes). */
+  subscribe(listener: (status: UpdateStatus) => void): () => void {
+    this.#listeners.add(listener)
+    return () => {
+      this.#listeners.delete(listener)
+    }
+  }
+
   async check(): Promise<UpdateStatus> {
     if (this.#checkPromise) return this.#checkPromise
     this.#checkPromise = this.#check().finally(() => {
@@ -100,8 +110,15 @@ export class UpdateService {
     if (this.#nativeUpdater) {
       this.#set({ state: 'downloading', message: '正在下载更新…' })
       try {
+        this.#nativeUpdater.on?.('download-progress', (progress) => {
+          this.#set({ downloadPercent: Math.max(0, Math.min(100, Math.round(progress.percent))) })
+        })
         await this.#nativeUpdater.downloadUpdate()
-        return this.#set({ state: 'downloaded', message: '更新已下载，请确认后重启安装。' })
+        return this.#set({
+          state: 'downloaded',
+          downloadPercent: 100,
+          message: '更新已下载，请确认后重启安装。'
+        })
       } catch {
         return this.#set({ state: 'error', message: '更新下载失败，请稍后重试。' })
       }
@@ -143,7 +160,14 @@ export class UpdateService {
       assertTrustedRedirect(response)
       directory = await mkdtemp(join(tmpdir(), 'bid-sentry-update-'))
       const path = join(directory, asset.name)
-      const actualHash = await streamResponseToFile(response, path, 1_000_000_000)
+      const totalBytes = Number(response.headers.get('content-length') ?? 0) || 0
+      const actualHash = await streamResponseToFile(response, path, 1_000_000_000, (received) => {
+        if (totalBytes > 0) {
+          this.#set({
+            downloadPercent: Math.max(0, Math.min(99, Math.round((received / totalBytes) * 100)))
+          })
+        }
+      })
       if (actualHash !== expectedHash) {
         await rm(directory, { recursive: true, force: true })
         directory = undefined
@@ -154,6 +178,7 @@ export class UpdateService {
         state: 'downloaded',
         assetName: asset.name,
         downloadedPathId: randomUUID(),
+        downloadPercent: 100,
         message: '更新已下载，请确认后打开安装程序。'
       })
       return this.#status
@@ -301,7 +326,17 @@ export class UpdateService {
     }
     if (next.state !== 'downloaded') delete next.downloadedPathId
     if (next.state === 'manual-only') delete next.assetName
+    if (next.state !== 'downloading' && next.state !== 'downloaded') {
+      delete next.downloadPercent
+    }
     this.#status = UpdateStatusSchema.parse(next)
+    for (const listener of this.#listeners) {
+      try {
+        listener(this.#status)
+      } catch {
+        // A broken listener must not break update state transitions.
+      }
+    }
     return this.#status
   }
 }
@@ -402,7 +437,8 @@ async function readResponseBytes(response: Response, limit: number): Promise<Uin
 async function streamResponseToFile(
   response: Response,
   filePath: string,
-  limit: number
+  limit: number,
+  onProgress?: (receivedBytes: number) => void
 ): Promise<string> {
   if (!response.body) throw new Error('update-response-body-missing')
   const handle = await open(filePath, 'wx', 0o700)
@@ -418,6 +454,7 @@ async function streamResponseToFile(
       if (total > limit) throw new Error('update-response-too-large')
       hash.update(chunk)
       await handle.write(chunk)
+      onProgress?.(total)
     }
     await handle.sync()
     return hash.digest('hex')

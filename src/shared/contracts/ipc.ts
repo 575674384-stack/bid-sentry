@@ -34,6 +34,7 @@ export const IPC_CHANNELS = Object.freeze({
   updatesDownload: 'updates:download',
   updatesInstall: 'updates:install',
   updatesOpenRelease: 'updates:open-release',
+  updatesStatus: 'updates:status',
   reviewStart: 'review:start',
   reviewRun: 'review:run',
   reviewCancel: 'review:cancel',

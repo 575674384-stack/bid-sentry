@@ -1,5 +1,4 @@
-import { IconInfo } from '../../components/icons'
-import { Notice } from '../../components/ui'
+import { Button, Progress, Tag, Typography } from 'antd'
 import { updateStateText, updateStateTone, useUpdateStatus } from './useUpdateStatus'
 
 /** Compact update indicator for the sidebar footer. Read-only. */
@@ -16,90 +15,106 @@ export function SidebarUpdateBadge(): React.JSX.Element {
 /** Full update status + confirmed actions, embedded in the settings page. */
 export function UpdatePanel(): React.JSX.Element {
   const { status, busy, error, check, download, install, openRelease } = useUpdateStatus()
+  const state = status?.state ?? 'idle'
+  const downloading = state === 'downloading'
 
   return (
-    <div className="card-stack" aria-live="polite">
-      <div className="stat-row">
-        <span className="stat-chip">
-          <span className={`dot is-${updateStateTone(status)}`} aria-hidden="true" />
+    <div className="stack" aria-live="polite">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <Tag color={tagColor(state)} style={{ marginInlineEnd: 0 }}>
           {updateStateText(status)}
-        </span>
-        <span className="stat-chip">
-          当前版本 <strong>v{status?.currentVersion ?? '—'}</strong>
-        </span>
-        {status?.latestVersion ? (
-          <span className="stat-chip">
-            最新版本 <strong>v{status.latestVersion}</strong>
-          </span>
-        ) : null}
+        </Tag>
+        <Typography.Text type="secondary" className="mono" style={{ fontSize: 12.5 }}>
+          当前 v{status?.currentVersion ?? '—'}
+          {status?.latestVersion && state !== 'not-available' ? ` → v${status.latestVersion}` : ''}
+        </Typography.Text>
       </div>
 
-      <p className="muted text-sm">
-        仅访问官方 GitHub Releases；检查不会自动下载，下载和安装都需要你手动确认。
-        {status?.releasePublishedAt
-          ? ` 发布时间：${new Date(status.releasePublishedAt).toLocaleString()}。`
-          : ''}
-      </p>
-
-      {status?.signatureStatus === 'unsigned' ? (
-        <Notice tone="warning" title="发布包未签名">
-          下载前请核对官方 Release 页面的校验和，确认来源后再安装。
-        </Notice>
+      {downloading || state === 'checking' ? (
+        <Progress
+          {...(status?.downloadPercent !== undefined ? { percent: status.downloadPercent } : {})}
+          status="active"
+          strokeColor="#1f3a5f"
+          size="small"
+          aria-label="更新下载进度"
+        />
       ) : null}
 
-      {status?.message ? <p className="muted text-sm">{status.message}</p> : null}
+      {status?.message && state !== 'idle' ? (
+        <Typography.Text type="secondary" style={{ fontSize: 12.5 }}>
+          {status.message}
+          {status.releasePublishedAt
+            ? ` 发布于 ${new Date(status.releasePublishedAt).toLocaleDateString('zh-CN')}。`
+            : ''}
+        </Typography.Text>
+      ) : null}
 
-      {status?.releaseNotes ? (
+      {status?.releaseNotes && (state === 'available' || downloading || state === 'downloaded') ? (
         <pre className="release-notes" aria-label="更新说明">
-          {status.releaseNotes}
+          {plainReleaseNotes(status.releaseNotes)}
         </pre>
       ) : null}
 
-      {error ? (
-        <Notice tone="danger" title="更新操作未完成">
-          {error}
-        </Notice>
+      {status?.signatureStatus === 'unsigned' && state === 'available' ? (
+        <Typography.Text type="warning" style={{ fontSize: 12.5 }}>
+          发布包未签名：安装前请核对官方 Release 页面的 SHA256SUMS。
+        </Typography.Text>
       ) : null}
 
-      <div className="btn-row">
-        <button
-          className="btn btn-secondary"
-          type="button"
+      {error ? (
+        <Typography.Text type="danger" style={{ fontSize: 12.5 }}>
+          {error}
+        </Typography.Text>
+      ) : null}
+
+      <div className="actions" style={{ justifyContent: 'flex-start' }}>
+        <Button
           onClick={() => void check()}
-          disabled={busy}
+          loading={busy && state === 'checking'}
+          disabled={busy && state !== 'checking'}
         >
-          {busy && status?.state === 'checking' ? '正在检查…' : '检查更新'}
-        </button>
-        {status?.state === 'available' ? (
-          <button
-            className="btn btn-primary"
-            type="button"
-            onClick={() => void download()}
-            disabled={busy}
-          >
+          检查更新
+        </Button>
+        {state === 'available' ? (
+          <Button type="primary" onClick={() => void download()} disabled={busy}>
             下载更新
-          </button>
+          </Button>
         ) : null}
-        {status?.state === 'downloaded' ? (
-          <button
-            className="btn btn-primary"
-            type="button"
-            onClick={() => void install()}
-            disabled={busy}
-          >
+        {state === 'downloaded' ? (
+          <Button type="primary" onClick={() => void install()} disabled={busy}>
             安装并重启
-          </button>
+          </Button>
         ) : null}
-        <button
-          className="btn btn-ghost"
-          type="button"
-          onClick={() => void openRelease()}
-          disabled={busy}
-        >
-          <IconInfo size={14} />
+        <Button type="text" onClick={() => void openRelease()} disabled={busy}>
           查看 Release 页面
-        </button>
+        </Button>
       </div>
     </div>
   )
+}
+
+function tagColor(state: string): string {
+  switch (state) {
+    case 'not-available':
+      return 'success'
+    case 'available':
+    case 'downloading':
+    case 'downloaded':
+      return 'processing'
+    case 'error':
+      return 'error'
+    default:
+      return 'default'
+  }
+}
+
+/** Release notes arrive as untrusted markdown-ish text; flatten it. */
+function plainReleaseNotes(notes: string): string {
+  return notes
+    .split(/\r?\n/u)
+    .map((line) => line.replace(/^\s{0,3}#{1,6}\s+/u, '').replace(/^\s*[-*]\s+/u, '· '))
+    .join('\n')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trim()
+    .slice(0, 2_000)
 }
