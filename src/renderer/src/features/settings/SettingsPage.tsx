@@ -5,6 +5,8 @@ import {
   type AiSettingsUpdate
 } from '../../../../shared/contracts'
 import { useSettings, type SettingsController } from './useSettings'
+import { UpdateStatus } from '../updates/UpdateStatus'
+import { bidSentryApi } from '../../api/bidSentryApi'
 
 export function SettingsPage(): React.JSX.Element {
   const controller = useSettings()
@@ -50,6 +52,10 @@ function SettingsForm({
   const [model, setModel] = useState(settings.model)
   const [timeoutSeconds, setTimeoutSeconds] = useState(String(settings.timeoutMs / 1_000))
   const [maxConcurrency, setMaxConcurrency] = useState(String(settings.maxConcurrency))
+  const [closeToTray, setCloseToTray] = useState(settings.closeToTray ?? false)
+  const [checkUpdatesOnStartup, setCheckUpdatesOnStartup] = useState(
+    settings.checkUpdatesOnStartup ?? true
+  )
   const [apiKey, setApiKey] = useState('')
   const [clearApiKey, setClearApiKey] = useState(false)
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
@@ -61,6 +67,8 @@ function SettingsForm({
       model: model.trim(),
       timeoutMs: Number(timeoutSeconds) * 1_000,
       maxConcurrency: Number(maxConcurrency),
+      closeToTray,
+      checkUpdatesOnStartup,
       ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
       clearApiKey
     })
@@ -200,6 +208,27 @@ function SettingsForm({
           <span>保存时清除已保存的 API Key</span>
         </label>
 
+        <div className="settings-options" aria-label="桌面行为">
+          <label className="clear-key-option">
+            <input
+              type="checkbox"
+              checked={closeToTray}
+              onChange={(event) => setCloseToTray(event.currentTarget.checked)}
+              disabled={busy}
+            />
+            <span>关闭窗口时最小化到系统托盘（默认关闭）</span>
+          </label>
+          <label className="clear-key-option">
+            <input
+              type="checkbox"
+              checked={checkUpdatesOnStartup}
+              onChange={(event) => setCheckUpdatesOnStartup(event.currentTarget.checked)}
+              disabled={busy}
+            />
+            <span>启动后检查 GitHub Releases 更新（需要用户确认下载/安装）</span>
+          </label>
+        </div>
+
         {validationMessage || controller.errorMessage ? (
           <div className="notice danger" role="alert">
             <strong>设置未生效</strong>
@@ -239,10 +268,11 @@ function SettingsForm({
       </form>
 
       <aside className="settings-aside" aria-label="AI 使用边界">
+        <UpdateStatus />
         <div className="aside-card accent">
-          <span className="aside-number">M1</span>
-          <h3>当前只测试连接</h3>
-          <p>元数据清洗完全由本机确定性代码完成，不会把文档内容发送给 AI。</p>
+          <span className="aside-number">AI</span>
+          <h3>按需参与审查</h3>
+          <p>元数据清洗和资格标生成默认在本机完成；只有在对照审查页明确确认后才会发送受限文本。</p>
         </div>
         <div className="aside-card">
           <h3>密钥边界</h3>
@@ -251,6 +281,19 @@ function SettingsForm({
             <li>支持系统加密时才会持久化</li>
             <li>连接失败不会记录 Key 或响应正文</li>
           </ul>
+        </div>
+        <div className="aside-card">
+          <h3>故障诊断</h3>
+          <p>
+            错误页只显示脱敏阶段和编号。需要反馈问题时，可以打开本机诊断目录，不会包含文档内容或密钥。
+          </p>
+          <button
+            className="button text-button"
+            type="button"
+            onClick={() => void bidSentryApi.openDiagnosticsDirectory()}
+          >
+            打开诊断目录
+          </button>
         </div>
       </aside>
     </div>
@@ -263,6 +306,8 @@ function settingsKey(settings: AiSettings): string {
     settings.model,
     settings.timeoutMs,
     settings.maxConcurrency,
+    settings.closeToTray,
+    settings.checkUpdatesOnStartup,
     settings.hasApiKey,
     settings.secretPersistence
   ].join('|')

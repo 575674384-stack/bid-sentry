@@ -5,9 +5,10 @@ import type { PDFDocument, PDFObject } from 'pdf-lib'
 import type {
   MetadataFieldCategory,
   MetadataFieldDescriptor,
+  MetadataPreviewItem,
   MetadataValueType
 } from '../../../shared/contracts'
-import type { TaskRandomMapping } from '../../sanitization/randomMapping'
+import { TaskRandomMapping } from '../../sanitization/randomMapping'
 import { DocumentSafetyError } from '../fileSafety'
 import type {
   MutablePdfMetadataOccurrence,
@@ -25,6 +26,12 @@ export interface PdfMetadataScan {
   fields: MetadataFieldDescriptor[]
   warnings: string[]
   occurrences: PdfMetadataOccurrence[]
+}
+
+export interface PdfMetadataPlanData {
+  fields: MetadataFieldDescriptor[]
+  items: MetadataPreviewItem[]
+  replacementValues: Readonly<Record<string, string>>
 }
 
 export interface PdfMetadataPreservationFingerprint {
@@ -67,7 +74,60 @@ export function scanPdfMetadata(document: PDFDocument): PdfMetadataScan {
   }
 }
 
-export function sanitizePdfMetadata(document: PDFDocument, mapping: TaskRandomMapping): void {
+export function createPdfMetadataPlan(document: PDFDocument): PdfMetadataPlanData {
+  const parsed = parseMetadata(document)
+  const occurrences = parsed.occurrences
+  const mapping = new TaskRandomMapping()
+  const replacementValues = new Map<string, string>()
+  try {
+    const created = occurrences.filter(
+      (occurrence) => occurrence.action === 'randomize' && occurrence.dateRole === 'created'
+    )
+    const modified = occurrences.filter(
+      (occurrence) => occurrence.action === 'randomize' && occurrence.dateRole === 'modified'
+    )
+    if (created.length > 0 || modified.length > 0) {
+      const pair = mapping.timestampPair(
+        created[0]?.originalValue ?? '__missing-created__',
+        modified[0]?.originalValue ?? '__missing-modified__'
+      )
+      for (const occurrence of created)
+        replacementValues.set(occurrence.locator, pdfCompatibleTimestamp(pair.created))
+      for (const occurrence of modified)
+        replacementValues.set(occurrence.locator, pdfCompatibleTimestamp(pair.modified))
+    }
+    for (const occurrence of occurrences) {
+      if (occurrence.action !== 'randomize' || replacementValues.has(occurrence.locator)) continue
+      replacementValues.set(occurrence.locator, randomizedValue(mapping, occurrence))
+    }
+    return {
+      fields: groupDescriptors(occurrences.map(stripSetter)),
+      items: occurrences.map((occurrence) => ({
+        part: 'PDF metadata',
+        locator: occurrence.locator,
+        field: occurrence.field,
+        category: occurrence.category,
+        valueType: occurrence.valueType,
+        occurrences: 1 as const,
+        action: occurrence.action,
+        originalDisplayValue: displayValue(occurrence.originalValue),
+        replacementDisplayValue:
+          occurrence.action === 'randomize'
+            ? displayValue(replacementValues.get(occurrence.locator) ?? '')
+            : null
+      })),
+      replacementValues: Object.fromEntries(replacementValues)
+    }
+  } finally {
+    mapping.destroy()
+  }
+}
+
+export function sanitizePdfMetadata(
+  document: PDFDocument,
+  mapping: TaskRandomMapping,
+  replacementValues?: Readonly<Record<string, string>>
+): void {
   const parsed = parseMetadata(document)
   const handled = new Set<string>()
   const created = parsed.occurrences.filter(
@@ -76,7 +136,15 @@ export function sanitizePdfMetadata(document: PDFDocument, mapping: TaskRandomMa
   const modified = parsed.occurrences.filter(
     (occurrence) => occurrence.action === 'randomize' && occurrence.dateRole === 'modified'
   )
-  if (created.length > 0 || modified.length > 0) {
+  if (replacementValues) {
+    for (const occurrence of parsed.occurrences) {
+      if (occurrence.action !== 'randomize') continue
+      const value = replacementValues[occurrence.locator]
+      if (value === undefined) throw new DocumentSafetyError('PLAN_EXPIRED')
+      occurrence.setValue(value)
+      handled.add(occurrence.locator)
+    }
+  } else if (created.length > 0 || modified.length > 0) {
     const pair = mapping.timestampPair(
       created[0]?.originalValue ?? '__missing-created__',
       modified[0]?.originalValue ?? '__missing-modified__'
@@ -98,6 +166,18 @@ export function sanitizePdfMetadata(document: PDFDocument, mapping: TaskRandomMa
     occurrence.setValue(randomizedValue(mapping, occurrence))
   }
   if (parsed.xmp) writePdfXmp(document, parsed.xmp)
+}
+
+function displayValue(value: string): string {
+  const sanitized = [...value]
+    .map((character) => {
+      const code = character.charCodeAt(0)
+      return code < 32 || code === 127 ? '�' : character
+    })
+    .join('')
+    .trim()
+  if (!sanitized) return '（空值）'
+  return sanitized.length > 2_000 ? `${sanitized.slice(0, 1_997)}…` : sanitized
 }
 
 export function pdfMetadataPreservationFingerprint(

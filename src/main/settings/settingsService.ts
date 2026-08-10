@@ -8,26 +8,31 @@ import {
   type AiSettings,
   type AiSettingsUpdate
 } from '../../shared/contracts/settings'
+import { APP_SETTINGS_SCHEMA_VERSION } from '../../shared/contracts/appSettings'
 import type { SecretStore } from './secretStore'
 
 const StoredSettingsSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(APP_SETTINGS_SCHEMA_VERSION)]),
     baseUrl: z.string().url().max(2_048),
     model: z.string().trim().min(1).max(200),
     timeoutMs: z.number().int().min(5_000).max(120_000),
-    maxConcurrency: z.number().int().min(1).max(4)
+    maxConcurrency: z.number().int().min(1).max(4),
+    closeToTray: z.boolean().optional(),
+    checkUpdatesOnStartup: z.boolean().optional()
   })
   .strict()
 
 type StoredSettings = z.infer<typeof StoredSettingsSchema>
 
 const DEFAULT_SETTINGS: StoredSettings = Object.freeze({
-  schemaVersion: 1,
+  schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
   baseUrl: 'https://api.openai.com/v1',
   model: 'gpt-5-mini',
   timeoutMs: 15_000,
-  maxConcurrency: 1
+  maxConcurrency: 1,
+  closeToTray: false,
+  checkUpdatesOnStartup: true
 })
 
 export class SettingsService {
@@ -43,6 +48,9 @@ export class SettingsService {
 
     return AiSettingsSchema.parse({
       ...stored,
+      schemaVersion: 1,
+      closeToTray: stored.closeToTray ?? false,
+      checkUpdatesOnStartup: stored.checkUpdatesOnStartup ?? true,
       hasApiKey: Boolean(apiKey),
       secretPersistence: this.secretStore.persistence
     })
@@ -51,11 +59,13 @@ export class SettingsService {
   async save(updateInput: AiSettingsUpdate): Promise<AiSettings> {
     const update = AiSettingsUpdateSchema.parse(updateInput)
     const stored = StoredSettingsSchema.parse({
-      schemaVersion: 1,
+      schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
       baseUrl: normalizeAiBaseUrl(update.baseUrl),
       model: update.model.trim(),
       timeoutMs: update.timeoutMs,
-      maxConcurrency: update.maxConcurrency
+      maxConcurrency: update.maxConcurrency,
+      closeToTray: update.closeToTray ?? false,
+      checkUpdatesOnStartup: update.checkUpdatesOnStartup ?? true
     })
 
     if (update.clearApiKey) {
@@ -77,13 +87,26 @@ export class SettingsService {
       const source = await readFile(this.settingsPath, 'utf8')
       const parsed = StoredSettingsSchema.safeParse(JSON.parse(source) as unknown)
       if (parsed.success) {
-        return parsed.data
+        return normalizeStoredSettings(parsed.data)
       }
 
       await this.quarantineCorruptSettings()
       return DEFAULT_SETTINGS
     } catch (error) {
       if (isNodeError(error) && error.code === 'ENOENT') {
+        const legacyPath = this.settingsPath.replace(/\.v2\.json$/u, '.v1.json')
+        if (legacyPath !== this.settingsPath) {
+          try {
+            const legacy = StoredSettingsSchema.parse(
+              JSON.parse(await readFile(legacyPath, 'utf8')) as unknown
+            )
+            const migrated = normalizeStoredSettings(legacy)
+            await writeJsonAtomically(this.settingsPath, migrated)
+            return migrated
+          } catch {
+            // A missing or corrupt legacy file falls back to safe defaults.
+          }
+        }
         return DEFAULT_SETTINGS
       }
       if (error instanceof SyntaxError) {
@@ -103,6 +126,18 @@ export class SettingsService {
         throw new Error('无法隔离损坏的应用设置。', { cause: error })
       }
     }
+  }
+}
+
+function normalizeStoredSettings(settings: StoredSettings): StoredSettings {
+  return {
+    schemaVersion: APP_SETTINGS_SCHEMA_VERSION,
+    baseUrl: settings.baseUrl,
+    model: settings.model,
+    timeoutMs: settings.timeoutMs,
+    maxConcurrency: settings.maxConcurrency,
+    closeToTray: settings.closeToTray ?? false,
+    checkUpdatesOnStartup: settings.checkUpdatesOnStartup ?? true
   }
 }
 

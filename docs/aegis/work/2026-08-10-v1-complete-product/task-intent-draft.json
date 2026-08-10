@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "修复 DOCX 清洗失败并完成元数据明细、托盘、GitHub 更新、对照审查、资格标预制作，经过 G1-G5 后只发布 v1.0.0",
+  "goal": "修复 DOCX 清洗失败并完成元数据明细、托盘、GitHub 更新、对照审查、资格标预制作，经过 G1-G5 后只发布 v1.0.0",
+  "successEvidence": [
+    "fresh static, unit, integration, coverage and build checks",
+    "development Electron E2E plus Linux production startup and packaged functional E2E",
+    "Windows x64 CI build/package/E2E evidence",
+    "package audit, updater metadata/checksum verification, and manual office/PDF-reader compatibility records",
+    "exactly one final v1.0.0 release with documented assets and checksums"
+  ],
+  "stopCondition": "Stop when success evidence is satisfied or a blocker/risk requires pause.",
+  "nonGoals": [
+    "OCR",
+    "hosted service",
+    "accounts",
+    "database",
+    "telemetry",
+    "silent updates",
+    "automatic bid-file modification or submission",
+    "intermediate public versions"
+  ],
+  "scope": "G1-G5；Windows/Linux x64；DOCX/PDF；不含 OCR、服务端、数据库和中间 Release",
+  "changeKinds": [
+    "feature"
+  ],
+  "riskHints": [
+    "Windows CI and manual office/PDF-reader evidence are required before release",
+    "Do not infer the incident DOCX root cause from synthetic fixtures alone"
+  ]
+}

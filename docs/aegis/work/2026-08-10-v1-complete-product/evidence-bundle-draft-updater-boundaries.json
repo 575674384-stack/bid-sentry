@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "updater-boundaries",
+  "type": "test",
+  "source": "tests/unit/updateService.test.ts",
+  "summary": "Trusted CDN redirect, exact x86_64/version asset selection, checksum mismatch and native/manual updater paths are covered.",
+  "verifier": "Vitest 4.1.10"
+}

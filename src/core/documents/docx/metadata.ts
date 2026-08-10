@@ -3,9 +3,10 @@ import type { Document as XmlDocument } from '@xmldom/xmldom'
 import type {
   MetadataFieldCategory,
   MetadataFieldDescriptor,
+  MetadataPreviewItem,
   MetadataValueType
 } from '../../../shared/contracts'
-import type { TaskRandomMapping } from '../../sanitization/randomMapping'
+import { TaskRandomMapping } from '../../sanitization/randomMapping'
 import { DocumentSafetyError } from '../fileSafety'
 import { replaceArchiveEntries, type DocxArchive } from './archive'
 import {
@@ -51,6 +52,12 @@ export interface DocxMetadataScan {
   fields: MetadataFieldDescriptor[]
   warnings: string[]
   occurrences: DocxMetadataOccurrence[]
+}
+
+export interface DocxMetadataPlanData {
+  fields: MetadataFieldDescriptor[]
+  items: MetadataPreviewItem[]
+  replacementValues: Readonly<Record<string, string>>
 }
 
 interface MutableOccurrence extends DocxMetadataOccurrence {
@@ -117,9 +124,41 @@ export function scanDocxMetadata(archive: DocxArchive): DocxMetadataScan {
   }
 }
 
+/** Build the immutable preview projection and the exact values used at execute time. */
+export function createDocxMetadataPlan(archive: DocxArchive): DocxMetadataPlanData {
+  const parsedParts = parseMetadataParts(archive)
+  const occurrences = parsedParts.flatMap((part) => part.occurrences)
+  const mapping = new TaskRandomMapping()
+  const replacementValues = new Map<string, string>()
+  try {
+    const created = occurrences.find((occurrence) => occurrence.field === 'core:created')
+    const modified = occurrences.find((occurrence) => occurrence.field === 'core:modified')
+    if (created?.action === 'randomize' && modified?.action === 'randomize') {
+      const pair = mapping.timestampPair(created.originalValue, modified.originalValue)
+      replacementValues.set(occurrenceKey(created), pair.created)
+      replacementValues.set(occurrenceKey(modified), pair.modified)
+    }
+    for (const occurrence of occurrences) {
+      if (occurrence.action !== 'randomize' || !occurrence.replacementKind) continue
+      if (replacementValues.has(occurrenceKey(occurrence))) continue
+      replacementValues.set(occurrenceKey(occurrence), randomizedValue(mapping, occurrence))
+    }
+    return {
+      fields: groupDescriptors(occurrences.map(stripSetter)),
+      items: occurrences.map((occurrence) =>
+        toMetadataPreviewItem(occurrence, replacementValues.get(occurrenceKey(occurrence)) ?? null)
+      ),
+      replacementValues: Object.fromEntries(replacementValues)
+    }
+  } finally {
+    mapping.destroy()
+  }
+}
+
 export function sanitizeDocxMetadata(
   archive: DocxArchive,
-  mapping: TaskRandomMapping
+  mapping: TaskRandomMapping,
+  replacementValues?: Readonly<Record<string, string>>
 ): { archive: DocxArchive; changedParts: ReadonlySet<string> } {
   const parsedParts = parseMetadataParts(archive)
   const replacements = new Map<string, Buffer>()
@@ -127,22 +166,31 @@ export function sanitizeDocxMetadata(
   const allOccurrences = parsedParts.flatMap((part) => part.occurrences)
   const handled = new Set<string>()
 
-  const created = allOccurrences.find((occurrence) => occurrence.field === 'core:created')
-  const modified = allOccurrences.find((occurrence) => occurrence.field === 'core:modified')
-  if (created?.action === 'randomize' && modified?.action === 'randomize') {
-    const pair = mapping.timestampPair(created.originalValue, modified.originalValue)
-    created.setValue(pair.created)
-    modified.setValue(pair.modified)
-    handled.add(occurrenceKey(created))
-    handled.add(occurrenceKey(modified))
-  }
+  if (replacementValues) {
+    for (const occurrence of allOccurrences) {
+      if (occurrence.action !== 'randomize') continue
+      const value = replacementValues[occurrenceKey(occurrence)]
+      if (value === undefined) throw new DocumentSafetyError('PLAN_EXPIRED')
+      occurrence.setValue(value)
+      handled.add(occurrenceKey(occurrence))
+    }
+  } else {
+    const created = allOccurrences.find((occurrence) => occurrence.field === 'core:created')
+    const modified = allOccurrences.find((occurrence) => occurrence.field === 'core:modified')
+    if (created?.action === 'randomize' && modified?.action === 'randomize') {
+      const pair = mapping.timestampPair(created.originalValue, modified.originalValue)
+      created.setValue(pair.created)
+      modified.setValue(pair.modified)
+      handled.add(occurrenceKey(created))
+      handled.add(occurrenceKey(modified))
+    }
 
-  for (const occurrence of allOccurrences) {
-    if (occurrence.action !== 'randomize' || !occurrence.replacementKind) continue
-    if (handled.has(occurrenceKey(occurrence))) continue
-    occurrence.setValue(randomizedValue(mapping, occurrence))
+    for (const occurrence of allOccurrences) {
+      if (occurrence.action !== 'randomize' || !occurrence.replacementKind) continue
+      if (handled.has(occurrenceKey(occurrence))) continue
+      occurrence.setValue(randomizedValue(mapping, occurrence))
+    }
   }
-
   for (const part of parsedParts) {
     if (!part.occurrences.some((occurrence) => occurrence.action === 'randomize')) continue
     const serialized = new XMLSerializer().serializeToString(part.document)
@@ -151,6 +199,36 @@ export function sanitizeDocxMetadata(
   }
 
   return { archive: replaceArchiveEntries(archive, replacements), changedParts }
+}
+
+function toMetadataPreviewItem(
+  occurrence: DocxMetadataOccurrence,
+  replacement: string | null
+): MetadataPreviewItem {
+  return {
+    part: occurrence.partName,
+    locator: occurrence.locator,
+    field: occurrence.field,
+    category: occurrence.category,
+    valueType: occurrence.valueType,
+    occurrences: 1,
+    action: occurrence.action,
+    originalDisplayValue: displayValue(occurrence.originalValue),
+    replacementDisplayValue:
+      occurrence.action === 'randomize' ? displayValue(replacement ?? '') : null
+  }
+}
+
+function displayValue(value: string): string {
+  const sanitized = [...value]
+    .map((character) => {
+      const code = character.charCodeAt(0)
+      return code < 32 || code === 127 ? '�' : character
+    })
+    .join('')
+    .trim()
+  if (!sanitized) return '（空值）'
+  return sanitized.length > 2_000 ? `${sanitized.slice(0, 1_997)}…` : sanitized
 }
 
 export function normalizeDocxMetadataPart(partName: string, contents: Buffer): string {

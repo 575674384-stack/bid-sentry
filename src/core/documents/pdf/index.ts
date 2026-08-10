@@ -1,9 +1,10 @@
 import type { InputSnapshot } from '../../../shared/contracts'
 import type { DocumentAdapter, DocumentSanitizationPlan } from '../documentAdapter'
 import { DocumentSafetyError } from '../fileSafety'
-import { inspectPdfFile, type PdfInspection } from './inspect'
+import { inspectPdfFile, loadSafePdfFile, type PdfInspection } from './inspect'
 import { sanitizePdfToPath } from './sanitize'
 import { verifySanitizedPdf } from './verify'
+import { createPdfMetadataPlan } from './metadata'
 
 export interface PdfSanitizationPlan extends DocumentSanitizationPlan {
   documentType: 'pdf'
@@ -20,21 +21,31 @@ export const pdfDocumentAdapter: DocumentAdapter<PdfInspection, PdfSanitizationP
   async createPlan(input, inspection, signal) {
     assertPdfInput(input, signal)
     if (inspection.documentType !== 'pdf') throw new DocumentSafetyError('INTERNAL_ERROR')
+    const loaded = await loadSafePdfFile(input.absolutePath, signal)
+    const plan = createPdfMetadataPlan(loaded.document)
     return {
       documentType: 'pdf',
       inputSha256: input.sha256,
-      fields: inspection.fields.map((field) => ({ ...field }))
+      fields: plan.fields.length ? plan.fields : inspection.fields.map((field) => ({ ...field })),
+      previewItems: plan.items,
+      replacementValues: plan.replacementValues
     }
   },
 
   async sanitizeToTemp(input, plan, temporaryPath, signal) {
     assertMatchingPlan(input, plan, signal)
-    await sanitizePdfToPath(input.absolutePath, temporaryPath, signal)
+    await sanitizePdfToPath(input.absolutePath, temporaryPath, signal, plan.replacementValues)
   },
 
   async verify(input, plan, temporaryPath, signal) {
     assertMatchingPlan(input, plan, signal)
-    return verifySanitizedPdf(input.absolutePath, input.sha256, temporaryPath, signal)
+    return verifySanitizedPdf(
+      input.absolutePath,
+      input.sha256,
+      temporaryPath,
+      signal,
+      plan.replacementValues
+    )
   }
 }
 

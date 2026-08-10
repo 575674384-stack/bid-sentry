@@ -16,6 +16,14 @@ import {
   SanitizationPreviewRequestSchema,
   SanitizationTaskResultSchema,
   TaskCancelRequestSchema,
+  UpdateCheckRequestSchema,
+  UpdateDownloadRequestSchema,
+  UpdateInstallRequestSchema,
+  UpdatesOpenReleaseRequestSchema,
+  ReviewRunRequestSchema,
+  ReviewCancelRequestSchema,
+  GenerationPreviewRequestSchema,
+  GenerationRequestSchema,
   createAppError,
   toSafeAppError,
   type AppError,
@@ -27,6 +35,9 @@ import { testOpenAiCompatibleConnection } from '../ai/openAiCompatibleClient'
 import { normalizeAiBaseUrl, type SettingsService } from '../settings/settingsService'
 import { TaskManagerError, type TaskManager } from '../tasks/taskManager'
 import { PathRegistry } from './pathRegistry'
+import type { UpdateService } from '../updates/updateService'
+import type { ReviewTaskManager } from '../tasks/reviewTaskManager'
+import type { GenerationTaskManager } from '../tasks/generationTaskManager'
 
 export interface IpcSender {
   readonly id: number
@@ -56,6 +67,12 @@ export interface RegisterIpcDependencies {
   selectInputPaths(): Promise<readonly string[] | null>
   selectOutputDirectory(): Promise<string | null>
   showResultInFolder(absolutePath: string): void
+  onSettingsChanged?(settings: Awaited<ReturnType<SettingsService['getPublicSettings']>>): void
+  updateService?: UpdateService
+  openReleasePage?(url: string): void
+  openDiagnosticsDirectory?(): void
+  reviewTaskManager?: ReviewTaskManager
+  generationTaskManager?: GenerationTaskManager
 }
 
 type PayloadSchema<T> = { parse(value: unknown): T }
@@ -134,11 +151,101 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
     IPC_RESPONSE_DATA_SCHEMAS.settingsGet,
     async () => dependencies.settingsService.getPublicSettings()
   )
+  if (dependencies.updateService) {
+    register(
+      IPC_CHANNELS.updatesGet,
+      EmptyPayloadSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.updatesGet,
+      async () => dependencies.updateService?.status
+    )
+    register(
+      IPC_CHANNELS.updatesCheck,
+      UpdateCheckRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.updatesCheck,
+      async () => dependencies.updateService?.check()
+    )
+    register(
+      IPC_CHANNELS.updatesDownload,
+      UpdateDownloadRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.updatesDownload,
+      async () => dependencies.updateService?.download()
+    )
+    register(
+      IPC_CHANNELS.updatesInstall,
+      UpdateInstallRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.updatesInstall,
+      async () => dependencies.updateService?.install()
+    )
+    register(
+      IPC_CHANNELS.updatesOpenRelease,
+      UpdatesOpenReleaseRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.updatesOpenRelease,
+      async () => {
+        dependencies.openReleasePage?.(dependencies.updateService?.openReleasePage() ?? '')
+        return { schemaVersion: 1, accepted: true }
+      }
+    )
+  }
+  if (dependencies.reviewTaskManager) {
+    register(
+      IPC_CHANNELS.reviewRun,
+      ReviewRunRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.reviewRun,
+      async (event, request) => {
+        const tender = registry.resolveInputs(event.sender.id, [request.tenderInputId])[0]
+        const bid = registry.resolveInputs(event.sender.id, [request.bidInputId])[0]
+        if (!tender || !bid) throw new DocumentSafetyError('INVALID_REQUEST')
+        const output = registry.resolveOutputDirectory(event.sender.id, request.outputDirectoryId)
+        return dependencies.reviewTaskManager?.run(
+          request,
+          tender.snapshot,
+          bid.snapshot,
+          output.absolutePath
+        )
+      }
+    )
+    register(
+      IPC_CHANNELS.reviewCancel,
+      ReviewCancelRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.reviewCancel,
+      async (_event, request) => {
+        dependencies.reviewTaskManager?.cancel(request.taskId)
+        return { schemaVersion: 1, cancelled: true }
+      }
+    )
+  }
+  if (dependencies.generationTaskManager) {
+    register(
+      IPC_CHANNELS.generationPreview,
+      GenerationPreviewRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.generationPreview,
+      async (event, request) => {
+        const input = registry.resolveInputs(event.sender.id, [request.inputId])[0]
+        if (!input) throw new DocumentSafetyError('INVALID_REQUEST')
+        return dependencies.generationTaskManager?.preview(request, input.snapshot)
+      }
+    )
+    register(
+      IPC_CHANNELS.generationRun,
+      GenerationRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.generationRun,
+      async (event, request) => {
+        const input = registry.resolveInputs(event.sender.id, [request.inputId])[0]
+        if (!input) throw new DocumentSafetyError('INVALID_REQUEST')
+        const output = registry.resolveOutputDirectory(event.sender.id, request.outputDirectoryId)
+        return dependencies.generationTaskManager?.run(request, input.snapshot, output.absolutePath)
+      }
+    )
+  }
   register(
     IPC_CHANNELS.settingsSave,
     AiSettingsUpdateSchema,
     IPC_RESPONSE_DATA_SCHEMAS.settingsSave,
-    async (_event, update) => dependencies.settingsService.save(update)
+    async (_event, update) => {
+      const settings = await dependencies.settingsService.save(update)
+      dependencies.onSettingsChanged?.(settings)
+      return settings
+    }
   )
   register(
     IPC_CHANNELS.settingsTestAi,
@@ -249,6 +356,15 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
     IPC_RESPONSE_DATA_SCHEMAS.filesOpenResult,
     async (event, request) => {
       dependencies.showResultInFolder(registry.resolveResultFile(event.sender.id, request.fileId))
+      return { schemaVersion: 1, shown: true }
+    }
+  )
+  register(
+    IPC_CHANNELS.diagnosticsOpen,
+    EmptyPayloadSchema,
+    IPC_RESPONSE_DATA_SCHEMAS.diagnosticsOpen,
+    async () => {
+      dependencies.openDiagnosticsDirectory?.()
       return { schemaVersion: 1, shown: true }
     }
   )

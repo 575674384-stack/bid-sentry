@@ -10,7 +10,9 @@ export const AiSettingsSchema = z
     timeoutMs: z.number().int().min(5_000).max(120_000),
     maxConcurrency: z.number().int().min(1).max(4),
     hasApiKey: z.boolean(),
-    secretPersistence: z.enum(['encrypted', 'session'])
+    secretPersistence: z.enum(['encrypted', 'session']),
+    closeToTray: z.boolean().optional(),
+    checkUpdatesOnStartup: z.boolean().optional()
   })
   .strict()
 
@@ -21,6 +23,8 @@ export const AiSettingsUpdateSchema = z
     model: z.string().trim().min(1).max(200),
     timeoutMs: z.number().int().min(5_000).max(120_000),
     maxConcurrency: z.number().int().min(1).max(4),
+    closeToTray: z.boolean().optional(),
+    checkUpdatesOnStartup: z.boolean().optional(),
     apiKey: z.string().trim().min(1).max(8_192).optional(),
     clearApiKey: z.boolean().default(false)
   })

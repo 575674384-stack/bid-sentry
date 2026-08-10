@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-08-10-v1-complete-product",
+  "currentTodo": "Obtain Windows CI and manual compatibility evidence, then finalize the single v1.0.0 release",
+  "completedTodos": [
+    "Fresh full local gate after updater/release hardening: 153 tests passed, Linux package/audit/startup and packaged three-flow E2E passed"
+  ],
+  "activeSlice": "G5-release-verification",
+  "evidenceRefs": [
+    "docs/aegis/work/2026-08-10-v1-complete-product/90-evidence.md",
+    "docs/aegis/work/2026-08-10-v1-complete-product/proof-bundle.md"
+  ],
+  "blockedOn": "Windows CI evidence and manual Word/WPS/LibreOffice/PDF-reader compatibility records",
+  "nextStep": "Commit the verified 0.1.0 implementation, push main for Windows CI, then perform the final 1.0.0 version bump only after remaining evidence gates",
+  "updatedAt": "2026-08-10"
+}

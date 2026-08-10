@@ -98,6 +98,10 @@ test('sanitizes a synthetic DOCX through the real Preload, IPC, Worker, and resu
 
     await application.page.getByRole('button', { name: '生成清洗预览' }).click()
     await expect(application.page.getByRole('heading', { name: '检查修改范围' })).toBeVisible()
+    await expect(application.page.locator('.metadata-table')).toContainText(
+      DOCX_FIXTURE_VALUES.person
+    )
+    await expect(application.page.locator('.metadata-table')).toContainText('User-')
     const execute = application.page.getByRole('button', { name: '开始安全清洗' })
     await expect(execute).toBeDisabled()
     await application.page.getByRole('checkbox', { name: /我已查看修改类别/ }).check()
@@ -148,6 +152,51 @@ test('cancels an executing task without publishing output', async () => {
 
     await expect(application.page.getByRole('heading', { name: '没有生成最终文件' })).toBeVisible()
     await expect.poll(() => readdir(application.outputDirectory)).toEqual([])
+  } finally {
+    await closeTestApplication(application)
+  }
+})
+
+test('runs the deterministic bid review workflow and writes an evidence report', async () => {
+  const application = await launchTestApplication({ inputCount: 2 })
+  try {
+    await application.page.getByRole('button', { name: /对照审查/ }).click()
+    await application.page.getByRole('button', { name: '选择两个文件' }).click()
+    await application.page.getByRole('button', { name: '选择报告目录' }).click()
+    await application.page.getByLabel('确认的投标单位名称').fill('示例投标单位')
+    await application.page.getByRole('button', { name: '开始对照审查' }).click()
+    await expect(application.page.getByRole('heading', { name: '审查结果' })).toBeVisible({
+      timeout: 30_000
+    })
+    await expect
+      .poll(async () => readdir(application.outputDirectory))
+      .toContainEqual(expect.stringMatching(/^bid-review-.*\.json$/u))
+  } finally {
+    await closeTestApplication(application)
+  }
+})
+
+test('generates a qualification DOCX from a confirmed template candidate', async () => {
+  const application = await launchTestApplication({ inputCount: 1 })
+  try {
+    await application.page.getByRole('button', { name: /资格标预制作/ }).click()
+    await application.page.getByRole('button', { name: '选择招标文件' }).click()
+    await application.page.getByRole('button', { name: '选择输出目录' }).click()
+    await application.page
+      .locator('.generation-page')
+      .getByLabel('投标单位名称')
+      .fill('示例投标单位')
+    await application.page.getByRole('button', { name: '识别模板并生成填充计划' }).click()
+    await expect(application.page.getByRole('heading', { name: '确认模板和填充动作' })).toBeVisible(
+      { timeout: 30_000 }
+    )
+    await application.page.getByRole('button', { name: '确认并生成 DOCX 草稿' }).click()
+    await expect(application.page.getByRole('heading', { name: '资格标草稿已生成' })).toBeVisible({
+      timeout: 30_000
+    })
+    await expect
+      .poll(async () => readdir(application.outputDirectory))
+      .toContainEqual(expect.stringMatching(/资格标草稿\.docx$/u))
   } finally {
     await closeTestApplication(application)
   }
@@ -313,7 +362,8 @@ function childEnvironment(additions: Record<string, string>): Record<string, str
     'TMP',
     'USERPROFILE',
     'XAUTHORITY',
-    'XDG_RUNTIME_DIR'
+    'XDG_RUNTIME_DIR',
+    'BID_SENTRY_DISABLE_UPDATES'
   ]
   const inherited = Object.fromEntries(
     inheritedNames.flatMap((name) => {

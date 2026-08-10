@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "live-ai-compatibility",
+  "type": "command",
+  "source": "pnpm test:ai:live",
+  "summary": "User-provided compatible endpoint accepted models and JSON chat contract; output contained no secret configuration.",
+  "verifier": "local live compatibility script"
+}

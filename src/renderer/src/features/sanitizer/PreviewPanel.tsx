@@ -36,7 +36,8 @@ export function PreviewPanel(props: PreviewPanelProps): React.JSX.Element {
       </div>
 
       <p className="panel-intro">
-        这里只展示字段类别和数量，不显示清洗前的敏感值，也不会预先生成随机值。
+        以下为本次任务实际使用的随机计划：字段名、清洗前原值和随机新值仅保留在当前窗口内，
+        不会写入报告、历史或诊断。
       </p>
 
       <div className="preview-files">
@@ -64,6 +65,40 @@ export function PreviewPanel(props: PreviewPanelProps): React.JSX.Element {
               ) : (
                 <p className="quiet-message">没有发现需要重置的元数据字段。</p>
               )}
+
+              {(file.items?.length ?? 0) > 0 ? (
+                <div className="metadata-details" aria-label={`${file.displayName} 元数据明细`}>
+                  <div className="metadata-details-heading">
+                    <strong>字段明细</strong>
+                    <span>共 {file.items?.length ?? 0} 项</span>
+                  </div>
+                  <div className="metadata-table-wrap">
+                    <table className="metadata-table">
+                      <thead>
+                        <tr>
+                          <th>字段</th>
+                          <th>清洗前原值</th>
+                          <th>随机新值</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(file.items ?? []).map((item) => (
+                          <tr key={`${item.part}:${item.locator}`}>
+                            <td>
+                              <strong>{item.field}</strong>
+                              <small>{item.part}</small>
+                            </td>
+                            <td className="metadata-value">{item.originalDisplayValue}</td>
+                            <td className="metadata-value replacement">
+                              {item.replacementDisplayValue ?? '保持不变'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
 
               {file.warnings.length ? (
                 <div className="notice warning" role="status">

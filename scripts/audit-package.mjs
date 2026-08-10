@@ -17,6 +17,7 @@ const forbiddenPathPatterns = Object.freeze([
   /(^|\/)test-apikey\.md$/iu,
   /(^|\/)\.env(?:\.|$)/iu,
   /(^|\/)settings\.v1\.json$/iu,
+  /(^|\/)settings\.v2\.json$/iu,
   /(^|\/)secrets\.v1\.bin$/iu,
   /(^|\/)tests?(\/|$)/iu,
   /(^|\/)docs\/aegis(\/|$)/iu,

@@ -4,6 +4,8 @@ import { App } from './App'
 import './styles.css'
 import './styles/sanitizer.css'
 import './styles/settings.css'
+import './styles/review.css'
+import './styles/generation.css'
 import './styles/responsive.css'
 
 const root = document.getElementById('root')

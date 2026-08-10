@@ -76,6 +76,23 @@ export const MetadataFieldDescriptorSchema = z
   })
   .strict()
 
+const SafeDisplayValueSchema = z.string().max(2_000)
+
+/** A single metadata occurrence shown only in the active preview. */
+export const MetadataPreviewItemSchema = z
+  .object({
+    part: z.string().trim().min(1).max(200),
+    locator: z.string().trim().min(1).max(300),
+    field: z.string().trim().min(1).max(200),
+    category: MetadataFieldCategorySchema,
+    valueType: MetadataValueTypeSchema,
+    occurrences: z.literal(1),
+    action: z.enum(['randomize', 'preserve', 'warn']),
+    originalDisplayValue: SafeDisplayValueSchema,
+    replacementDisplayValue: SafeDisplayValueSchema.nullable()
+  })
+  .strict()
+
 export type DocumentType = z.infer<typeof DocumentTypeSchema>
 export type FileSystemIdentity = z.infer<typeof FileSystemIdentitySchema>
 export type TemporaryWorkspaceDescriptor = z.infer<typeof TemporaryWorkspaceDescriptorSchema>
@@ -84,3 +101,4 @@ export type ReportFileIdentity = z.infer<typeof ReportFileIdentitySchema>
 export type MetadataFieldCategory = z.infer<typeof MetadataFieldCategorySchema>
 export type MetadataValueType = z.infer<typeof MetadataValueTypeSchema>
 export type MetadataFieldDescriptor = z.infer<typeof MetadataFieldDescriptorSchema>
+export type MetadataPreviewItem = z.infer<typeof MetadataPreviewItemSchema>

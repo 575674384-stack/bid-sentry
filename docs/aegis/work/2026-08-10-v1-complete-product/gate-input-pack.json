@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "baselineRefs": [
+    "docs/aegis/plans/2026-08-10-v1-complete-product.md",
+    "AGENTS.md"
+  ],
+  "impactStatement": "docs/aegis/work/2026-08-10-v1-complete-product/impact-statement-draft.json",
+  "compatPlan": "Windows/Linux x64; DOCX/PDF metadata sanitization; DOCX and text-layer PDF review/generation; scanned PDF content workflows require text layer; no OCR.",
+  "retirementPlan": "aligned",
+  "evidenceBundle": [
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-cross-platform-gap.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-electron-e2e.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-linux-package.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-live-ai-compatibility.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-local-quality-gate.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-packaged-functional-e2e.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-pdf-text-layer.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-updater-boundaries.json"
+  ]
+}

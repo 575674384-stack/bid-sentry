@@ -1,4 +1,5 @@
 import { basename, dirname, resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import {
   TaskProgressSchema,
   TaskExecutionRequestSchema,
@@ -19,6 +20,7 @@ import {
   type WorkerPreviewRequest,
   type WorkerRequest
 } from '../../shared/contracts'
+import type { DiagnosticRecorder } from '../diagnostics/diagnosticRecorder'
 import {
   cleanupAbandonedTemporaryWorkspace,
   createTemporaryWorkspace,
@@ -48,6 +50,7 @@ export interface TaskManagerOptions {
   createWorkspace?: (outputDirectory: string) => Promise<TemporaryWorkspaceDescriptor>
   recordWorkspace?: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
   forgetWorkspace?: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
+  diagnostics?: DiagnosticRecorder
 }
 
 interface Deferred<T> {
@@ -104,6 +107,7 @@ export class TaskManager {
   readonly #createWorkspace: (outputDirectory: string) => Promise<TemporaryWorkspaceDescriptor>
   readonly #recordWorkspace: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
   readonly #forgetWorkspace: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
+  readonly #diagnostics: DiagnosticRecorder | undefined
 
   constructor(
     private readonly launchWorker: WorkerLauncher,
@@ -126,6 +130,7 @@ export class TaskManager {
       })
     this.#recordWorkspace = options.recordWorkspace ?? (async () => undefined)
     this.#forgetWorkspace = options.forgetWorkspace ?? (async () => undefined)
+    this.#diagnostics = options.diagnostics
   }
 
   get activeCount(): number {
@@ -386,25 +391,30 @@ export class TaskManager {
     cause?: unknown
   ): Promise<void> {
     if (record.settled) return
+    const safeError = withTaskDiagnostic(error, record.state)
+    void this.#diagnostics?.recordError(safeError, {
+      taskType: 'sanitization',
+      systemCategory: diagnosticCategory(safeError.code)
+    })
     record.settled = true
     this.#clearTimers(record)
     if (!existingProgress) {
-      record.state = error.code === 'TASK_CANCELLED' ? 'cancelled' : 'failed'
+      record.state = safeError.code === 'TASK_CANCELLED' ? 'cancelled' : 'failed'
       this.#emit(
         TaskProgressSchema.parse({
           schemaVersion: 1,
           taskId: record.taskId,
           state: record.state,
           progress: 0,
-          message: error.message,
-          ...(record.state === 'failed' ? { error } : {})
+          message: safeError.message,
+          ...(record.state === 'failed' ? { error: safeError } : {})
         })
       )
     }
     record.intentionalExit = true
     this.#kill(record)
     await this.#cleanup(record)
-    const failure = new TaskManagerError(error, cause)
+    const failure = new TaskManagerError(safeError, cause)
     record.preview.reject(failure)
     record.execution?.reject(failure)
   }
@@ -523,4 +533,58 @@ function failedProgress(taskId: string, error: AppError): TaskProgress {
     message: error.message,
     error
   })
+}
+
+function withTaskDiagnostic(error: AppError, state: TaskState): AppError {
+  if (error.code === 'TASK_CANCELLED') return error
+  if (error.detailId && error.stage) return error
+  const stage =
+    error.stage ??
+    (state === 'previewing'
+      ? 'document-parse'
+      : state === 'awaiting-confirmation'
+        ? 'workspace-prepare'
+        : state === 'running'
+          ? 'document-write'
+          : state === 'verifying'
+            ? 'verify'
+            : 'unknown')
+  return createAppError(error.code, {
+    retryable: error.retryable,
+    detailId: error.detailId ?? randomUUID(),
+    stage
+  })
+}
+
+function diagnosticCategory(
+  code: AppError['code']
+):
+  | 'filesystem'
+  | 'document'
+  | 'validation'
+  | 'process'
+  | 'network'
+  | 'update'
+  | 'cleanup'
+  | 'configuration'
+  | 'unknown' {
+  if (code === 'FILE_CHANGED' || code === 'OUTPUT_EXISTS' || code === 'FILE_TOO_LARGE') {
+    return 'filesystem'
+  }
+  if (
+    code === 'UNSUPPORTED_TYPE' ||
+    code === 'ENCRYPTED_FILE' ||
+    code === 'SIGNED_DOCUMENT' ||
+    code === 'SIGNED_PDF' ||
+    code === 'INVALID_DOCUMENT' ||
+    code === 'UNSAFE_ARCHIVE'
+  ) {
+    return 'document'
+  }
+  if (code === 'INVALID_REQUEST' || code === 'PLAN_EXPIRED') return 'validation'
+  if (code === 'TASK_TIMEOUT' || code === 'INTERNAL_ERROR') return 'process'
+  if (code === 'AI_CONFIG_INVALID') return 'configuration'
+  if (code === 'AI_CONNECTION_FAILED') return 'network'
+  if (code === 'TASK_CANCELLED') return 'cleanup'
+  return 'unknown'
 }

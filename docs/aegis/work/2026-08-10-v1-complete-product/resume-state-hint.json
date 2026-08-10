@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-08-10-v1-complete-product",
+  "lastCheckpointRef": "docs/aegis/work/2026-08-10-v1-complete-product/todo-checkpoint-draft.json",
+  "resumeInstruction": "Re-read the plan, evidence, checkpoint, AGENTS.md and release workflow before any version bump or Git mutation",
+  "knownPartialWork": [
+    "Fresh full local gate after updater/release hardening: 153 tests passed, Linux package/audit/startup and packaged three-flow E2E passed"
+  ],
+  "mustReadBeforeContinuing": [
+    "docs/aegis/work/2026-08-10-v1-complete-product/10-intent.md",
+    "docs/aegis/work/2026-08-10-v1-complete-product/20-checkpoint.md",
+    "docs/aegis/work/2026-08-10-v1-complete-product/todo-checkpoint-draft.json"
+  ],
+  "unsafeToAssume": [
+    "Do not infer Windows or office-reader compatibility from Linux results"
+  ]
+}

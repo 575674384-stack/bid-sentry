@@ -1,0 +1,174 @@
+name: Release v1.0.0
+
+on:
+  push:
+    tags:
+      - v1.0.0
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: release-v1.0.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish verified v1.0.0 assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verify immutable tag and package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "v1.0.0"
+          test "$(node -p "require('./package.json').version")" = "1.0.0"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 refs/tags/v1.0.0)"
+
+      - name: Wait for successful CI run for this exact commit
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=''
+          for attempt in $(seq 1 90); do
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --limit 20 --json databaseId,status,conclusion --jq '.[] | select(.status == "completed" and .conclusion == "success") | .databaseId' | head -n 1 || true)"
+            if [ -n "$run_id" ]; then break; fi
+            sleep 20
+          done
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download Linux CI artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${{ steps.ci.outputs.run_id }}" --repo "$GITHUB_REPOSITORY" --name bid-sentry-linux-x64 --dir release-assets/linux
+
+      - name: Download Windows CI artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${{ steps.ci.outputs.run_id }}" --repo "$GITHUB_REPOSITORY" --name bid-sentry-windows-x64 --dir release-assets/windows
+
+      - name: Verify asset set, checksums, and metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          linux_appimages=(release-assets/linux/*.AppImage)
+          linux_debs=(release-assets/linux/*.deb)
+          windows_setup=(release-assets/windows/*setup*.exe)
+          windows_portable=(release-assets/windows/*portable*.exe)
+          test "${#linux_appimages[@]}" -eq 1
+          test "${#linux_debs[@]}" -eq 1
+          test "${#windows_setup[@]}" -eq 1
+          test "${#windows_portable[@]}" -eq 1
+          test -f release-assets/linux/latest-linux.yml
+          test -f release-assets/windows/latest.yml
+          test ! -e release-assets/linux/builder-debug.yml
+          test ! -e release-assets/windows/builder-debug.yml
+          grep -Eq '^version: 1\.0\.0$' release-assets/linux/latest-linux.yml
+          grep -Eq '^version: 1\.0\.0$' release-assets/windows/latest.yml
+          grep -Eq '^path: bid-sentry-1\.0\.0-linux-x86_64\.AppImage$' release-assets/linux/latest-linux.yml
+          grep -Eq '^path: bid-sentry-setup-1\.0\.0-win-x64\.exe$' release-assets/windows/latest.yml
+          node - <<'NODE'
+          const { createHash } = require('node:crypto')
+          const { readFileSync } = require('node:fs')
+          function metadataSha512(metadataPath, targetName) {
+            const lines = readFileSync(metadataPath, 'utf8').split(/\r?\n/u)
+            const index = lines.findIndex((line) => line.trim() === `- url: ${targetName}`)
+            if (index < 0) throw new Error(`${metadataPath} is missing ${targetName}`)
+            const shaLine = lines
+              .slice(index + 1, index + 6)
+              .find((line) => line.trim().startsWith('sha512:'))
+            const sha = shaLine?.split(':').slice(1).join(':').trim()
+            if (!sha) throw new Error(`${metadataPath} is missing sha512 for ${targetName}`)
+            return sha
+          }
+          function assertMetadata(metadataPath, targetPath) {
+            const targetName = targetPath.split('/').at(-1)
+            if (!targetName) throw new Error(`Invalid target path: ${targetPath}`)
+            const expected = createHash('sha512').update(readFileSync(targetPath)).digest('base64')
+            const actual = metadataSha512(metadataPath, targetName)
+            if (actual !== expected) throw new Error(`${metadataPath} sha512 does not match ${targetPath}`)
+          }
+          assertMetadata(
+            'release-assets/linux/latest-linux.yml',
+            'release-assets/linux/bid-sentry-1.0.0-linux-x86_64.AppImage'
+          )
+          assertMetadata(
+            'release-assets/windows/latest.yml',
+            'release-assets/windows/bid-sentry-setup-1.0.0-win-x64.exe'
+          )
+          NODE
+          test -f release-assets/linux/SHA256SUMS
+          test -f release-assets/windows/SHA256SUMS
+          (cd release-assets/linux && sha256sum -c SHA256SUMS)
+          (cd release-assets/windows && sha256sum -c SHA256SUMS)
+          while IFS= read -r file; do
+            case "$file" in
+              SHA256SUMS|*.exe|*.AppImage|*.deb|*.7z|latest.yml|latest-linux.yml) : ;;
+              *) echo "Unexpected release asset: $file" >&2; exit 1 ;;
+            esac
+          done < <(find release-assets -type f -printf '%f\n')
+
+      - name: Build release manifest and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets/final
+          find release-assets/linux release-assets/windows -maxdepth 1 -type f \
+            \( -name '*.AppImage' -o -name '*.deb' -o -name '*setup*.exe' -o -name '*portable*.exe' -o -name 'latest.yml' -o -name 'latest-linux.yml' \) \
+            -exec cp {} release-assets/final/ \;
+          cp LICENSE release-assets/final/LICENSE
+          node - <<'NODE'
+          const { readFileSync, writeFileSync } = require('node:fs')
+          const { createHash } = require('node:crypto')
+          const { readdirSync } = require('node:fs')
+          const assets = readdirSync('release-assets/final')
+            .filter((name) => name !== 'SHA256SUMS' && name !== 'release-manifest.json')
+            .sort()
+          const hashes = Object.fromEntries(assets.map((name) => [name, createHash('sha256').update(readFileSync(`release-assets/final/${name}`)).digest('hex')]))
+          writeFileSync('release-assets/final/release-manifest.json', `${JSON.stringify({ schemaVersion: 1, tag: process.env.GITHUB_REF_NAME, commit: process.env.GITHUB_SHA, assets: hashes }, null, 2)}\n`)
+          NODE
+          (cd release-assets/final && sha256sum $(find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort) > SHA256SUMS)
+          (cd release-assets/final && find . -maxdepth 1 -type f -printf '%f\n' | sort > ../expected-assets.txt)
+          test -f release-assets/final/LICENSE
+          test -f release-assets/final/release-manifest.json
+          test -f release-assets/final/SHA256SUMS
+          (cd release-assets/final && sha256sum -c SHA256SUMS)
+          test "$(find release-assets/final -maxdepth 1 -type f | wc -l)" -eq 9
+          test "$(find release-assets/final -maxdepth 1 -type f -name '*.7z' | wc -l)" -eq 0
+
+      - name: Create or update the single GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes='release-notes.md'
+          cat > "$notes" <<'EOF'
+          # Bid Sentry v1.0.0
+
+          首个完整产品版本：元数据安全重置、招投标文件对照审查、资格标模板预制作、可选系统托盘和确认式 GitHub Releases 更新。
+
+          OCR 暂不支持；扫描 PDF 的审查/预制作需要可靠文本层；生成 DOCX 和 AI finding 都需要人工复核。发布包未做代码签名，请核对 `SHA256SUMS`。
+          EOF
+          if gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | while IFS= read -r name; do
+              if ! grep -Fxq "$name" release-assets/expected-assets.txt; then
+                gh release delete-asset v1.0.0 "$name" --repo "$GITHUB_REPOSITORY" --yes
+              fi
+            done
+            gh release upload v1.0.0 --repo "$GITHUB_REPOSITORY" release-assets/final/* --clobber
+          else
+            gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --verify-tag --title 'Bid Sentry v1.0.0' --notes-file "$notes" release-assets/final/*
+          fi
+          diff -u release-assets/expected-assets.txt <(gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)

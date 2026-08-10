@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "pdf-text-layer",
+  "type": "test",
+  "source": "tests/integration/documentReaders.test.ts and tests/integration/generationTask.test.ts",
+  "summary": "Real PDF text-layer extraction and scanned-PDF rejection for content workflows are covered; metadata-only scan sanitization remains tested.",
+  "verifier": "Vitest 4.1.10"
+}

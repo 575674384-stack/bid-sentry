@@ -43,7 +43,11 @@ export function useSanitizationTask(): SanitizationTaskController {
           : { type: 'selection-cancelled' }
       )
     } catch (error) {
-      dispatch({ type: 'operation-failed', message: userMessage(error) })
+      dispatch({
+        type: 'operation-failed',
+        message: userMessage(error),
+        ...(error instanceof BidSentryApiError ? { error: error.appError } : {})
+      })
     }
   }, [state.stage])
 
@@ -66,7 +70,11 @@ export function useSanitizationTask(): SanitizationTaskController {
       )
       dispatch({ type: 'preview-succeeded', preview })
     } catch (error) {
-      dispatch({ type: 'operation-failed', message: userMessage(error) })
+      dispatch({
+        type: 'operation-failed',
+        message: userMessage(error),
+        ...(error instanceof BidSentryApiError ? { error: error.appError } : {})
+      })
     }
   }, [state.files, state.stage])
 
@@ -109,7 +117,11 @@ export function useSanitizationTask(): SanitizationTaskController {
           }
         })
       } else {
-        dispatch({ type: 'operation-failed', message: userMessage(error) })
+        dispatch({
+          type: 'operation-failed',
+          message: userMessage(error),
+          ...(error instanceof BidSentryApiError ? { error: error.appError } : {})
+        })
       }
     }
   }, [state])

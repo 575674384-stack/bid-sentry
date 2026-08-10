@@ -1,7 +1,9 @@
 import { z } from 'zod'
+import { DiagnosticStageSchema } from './diagnostics'
 
 export const AppErrorCodeSchema = z.enum([
   'UNSUPPORTED_TYPE',
+  'TEXT_LAYER_REQUIRED',
   'FILE_TOO_LARGE',
   'FILE_CHANGED',
   'ENCRYPTED_FILE',
@@ -26,7 +28,8 @@ export const AppErrorSchema = z
     code: AppErrorCodeSchema,
     message: z.string().trim().min(1).max(500),
     retryable: z.boolean(),
-    detailId: z.string().uuid().optional()
+    detailId: z.string().uuid().optional(),
+    stage: DiagnosticStageSchema.optional()
   })
   .strict()
 
@@ -35,6 +38,7 @@ export type AppError = z.infer<typeof AppErrorSchema>
 
 const SAFE_MESSAGES: Readonly<Record<AppErrorCode, string>> = Object.freeze({
   UNSUPPORTED_TYPE: '该文件类型暂不受支持。',
+  TEXT_LAYER_REQUIRED: '该 PDF 没有可读取的文本层；当前版本暂不支持 OCR。',
   FILE_TOO_LARGE: '文件超过当前允许的大小限制。',
   FILE_CHANGED: '处理期间文件发生变化，请重新选择。',
   ENCRYPTED_FILE: '加密文件不能进行安全处理。',
@@ -55,14 +59,19 @@ const SAFE_MESSAGES: Readonly<Record<AppErrorCode, string>> = Object.freeze({
 
 export function createAppError(
   code: AppErrorCode,
-  options: { retryable?: boolean; detailId?: string } = {}
+  options: {
+    retryable?: boolean
+    detailId?: string
+    stage?: z.infer<typeof DiagnosticStageSchema>
+  } = {}
 ): AppError {
   return AppErrorSchema.parse({
     schemaVersion: 1,
     code,
     message: SAFE_MESSAGES[code],
     retryable: options.retryable ?? false,
-    ...(options.detailId ? { detailId: options.detailId } : {})
+    ...(options.detailId ? { detailId: options.detailId } : {}),
+    ...(options.stage ? { stage: options.stage } : {})
   })
 }
 
@@ -71,7 +80,8 @@ export function toSafeAppError(error: unknown): AppError {
   return knownError.success
     ? createAppError(knownError.data.code, {
         retryable: knownError.data.retryable,
-        ...(knownError.data.detailId ? { detailId: knownError.data.detailId } : {})
+        ...(knownError.data.detailId ? { detailId: knownError.data.detailId } : {}),
+        ...(knownError.data.stage ? { stage: knownError.data.stage } : {})
       })
     : createAppError('INTERNAL_ERROR')
 }

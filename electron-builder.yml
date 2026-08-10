@@ -12,6 +12,11 @@ files:
   - package.json
   - LICENSE
 artifactName: ${name}-${version}-${os}-${arch}.${ext}
+publish:
+  provider: github
+  owner: 575674384-stack
+  repo: bid-sentry
+  releaseType: release
 linux:
   category: Utility
   executableName: bid-sentry

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "electron-e2e",
+  "type": "command",
+  "source": "xvfb-run -a pnpm test:e2e",
+  "summary": "Development Electron E2E passed 6 tests; two package-path tests skipped as expected.",
+  "verifier": "Playwright 1.62.1"
+}

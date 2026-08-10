@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "cross-platform-gap",
+  "type": "note",
+  "source": "docs/aegis/work/2026-08-10-v1-complete-product/90-evidence.md",
+  "summary": "Windows CI and manual Word/WPS/LibreOffice/PDF-reader compatibility remain open and are not claimed.",
+  "verifier": "coordinator review"
+}

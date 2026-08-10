@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [
+    "core document adapters",
+    "sanitization/review/generation workers",
+    "Main IPC/settings/updater/tray",
+    "Preload/Renderer",
+    "tests and CI/release workflows"
+  ],
+  "owners": [
+    "core/documents writes and verifies documents",
+    "Main owns networking, secrets, lifecycle and verified publication",
+    "Renderer is presentation-only",
+    "shared Zod contracts own IPC data shapes"
+  ],
+  "invariants": [
+    "inputs remain read-only",
+    "preview and execution share one plan",
+    "no sensitive values persist",
+    "validation must pass before publication",
+    "AI and updater never write document outputs"
+  ],
+  "compatBoundary": "Windows/Linux x64; DOCX/PDF metadata sanitization; DOCX and text-layer PDF review/generation; scanned PDF content workflows require text layer; no OCR.",
+  "nonGoals": [
+    "OCR",
+    "hosted service",
+    "accounts",
+    "database",
+    "telemetry",
+    "silent updates",
+    "automatic bid-file modification or submission",
+    "intermediate public versions"
+  ]
+}

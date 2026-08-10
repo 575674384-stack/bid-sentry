@@ -11,7 +11,10 @@ import {
   type AiSettingsUpdate,
   type IpcResponseEnvelope,
   type SanitizationCommand,
-  type TaskProgress
+  type TaskProgress,
+  type ReviewRequest,
+  type GenerationPreviewRequest,
+  type GenerationRequest
 } from '../shared/contracts'
 
 export interface BidSentryApi {
@@ -26,6 +29,16 @@ export interface BidSentryApi {
   cancelTask(taskId: string): Promise<IpcResponseEnvelope>
   showResultInFolder(fileId: string): Promise<IpcResponseEnvelope>
   onTaskProgress(listener: (progress: TaskProgress) => void): () => void
+  getUpdateStatus(): Promise<IpcResponseEnvelope>
+  checkUpdates(): Promise<IpcResponseEnvelope>
+  downloadUpdate(): Promise<IpcResponseEnvelope>
+  installUpdate(): Promise<IpcResponseEnvelope>
+  openReleasePage(): Promise<IpcResponseEnvelope>
+  openDiagnosticsDirectory(): Promise<IpcResponseEnvelope>
+  runReview(request: ReviewRequest): Promise<IpcResponseEnvelope>
+  cancelReview(taskId: string): Promise<IpcResponseEnvelope>
+  previewGeneration(request: GenerationPreviewRequest): Promise<IpcResponseEnvelope>
+  runGeneration(request: GenerationRequest): Promise<IpcResponseEnvelope>
 }
 
 const api: BidSentryApi = {
@@ -64,7 +77,34 @@ const api: BidSentryApi = {
       subscribed = false
       ipcRenderer.removeListener(IPC_CHANNELS.taskSubscribe, handler)
     }
-  }
+  },
+  getUpdateStatus: () => invoke(IPC_CHANNELS.updatesGet, {}, IPC_RESPONSE_DATA_SCHEMAS.updatesGet),
+  checkUpdates: () =>
+    invoke(IPC_CHANNELS.updatesCheck, { schemaVersion: 1 }, IPC_RESPONSE_DATA_SCHEMAS.updatesCheck),
+  downloadUpdate: () =>
+    invoke(
+      IPC_CHANNELS.updatesDownload,
+      { schemaVersion: 1, acknowledged: true },
+      IPC_RESPONSE_DATA_SCHEMAS.updatesDownload
+    ),
+  installUpdate: () =>
+    invoke(
+      IPC_CHANNELS.updatesInstall,
+      { schemaVersion: 1, acknowledged: true },
+      IPC_RESPONSE_DATA_SCHEMAS.updatesInstall
+    ),
+  openReleasePage: () =>
+    invoke(IPC_CHANNELS.updatesOpenRelease, {}, IPC_RESPONSE_DATA_SCHEMAS.updatesOpenRelease),
+  openDiagnosticsDirectory: () =>
+    invoke(IPC_CHANNELS.diagnosticsOpen, {}, IPC_RESPONSE_DATA_SCHEMAS.diagnosticsOpen),
+  runReview: (request) =>
+    invoke(IPC_CHANNELS.reviewRun, request, IPC_RESPONSE_DATA_SCHEMAS.reviewRun),
+  cancelReview: (taskId) =>
+    invoke(IPC_CHANNELS.reviewCancel, { taskId }, IPC_RESPONSE_DATA_SCHEMAS.reviewCancel),
+  previewGeneration: (request) =>
+    invoke(IPC_CHANNELS.generationPreview, request, IPC_RESPONSE_DATA_SCHEMAS.generationPreview),
+  runGeneration: (request) =>
+    invoke(IPC_CHANNELS.generationRun, request, IPC_RESPONSE_DATA_SCHEMAS.generationRun)
 }
 Object.freeze(api)
 

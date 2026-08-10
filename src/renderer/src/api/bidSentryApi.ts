@@ -18,7 +18,18 @@ import {
   type SanitizationTaskResult,
   type SelectedInputFiles,
   type SelectedOutputDirectory,
-  type TaskProgress
+  type TaskProgress,
+  UpdateStatusSchema,
+  type UpdateStatus,
+  ReviewResultSchema,
+  type ReviewRequest,
+  type ReviewResult,
+  GenerationPreviewSchema,
+  GenerationResultSchema,
+  type GenerationPreviewRequest,
+  type GenerationRequest,
+  type GenerationPreview,
+  type GenerationResult
 } from '../../../shared/contracts'
 
 interface RendererBridge {
@@ -33,6 +44,16 @@ interface RendererBridge {
   cancelTask(taskId: string): Promise<unknown>
   showResultInFolder(fileId: string): Promise<unknown>
   onTaskProgress(listener: (progress: unknown) => void): () => void
+  getUpdateStatus(): Promise<unknown>
+  checkUpdates(): Promise<unknown>
+  downloadUpdate(): Promise<unknown>
+  installUpdate(): Promise<unknown>
+  openReleasePage(): Promise<unknown>
+  openDiagnosticsDirectory(): Promise<unknown>
+  runReview(request: ReviewRequest): Promise<unknown>
+  cancelReview(taskId: string): Promise<unknown>
+  previewGeneration(request: GenerationPreviewRequest): Promise<unknown>
+  runGeneration(request: GenerationRequest): Promise<unknown>
 }
 
 type RuntimeSchema<T> = { parse(value: unknown): T }
@@ -78,6 +99,40 @@ export const bidSentryApi = Object.freeze({
   },
   onTaskProgress(listener: (progress: TaskProgress) => void): () => void {
     return bridge().onTaskProgress((rawProgress) => listener(TaskProgressSchema.parse(rawProgress)))
+  },
+  getUpdateStatus(): Promise<UpdateStatus> {
+    return invoke(() => bridge().getUpdateStatus(), UpdateStatusSchema)
+  },
+  checkUpdates(): Promise<UpdateStatus> {
+    return invoke(() => bridge().checkUpdates(), UpdateStatusSchema)
+  },
+  downloadUpdate(): Promise<UpdateStatus> {
+    return invoke(() => bridge().downloadUpdate(), UpdateStatusSchema)
+  },
+  installUpdate(): Promise<UpdateStatus> {
+    return invoke(() => bridge().installUpdate(), UpdateStatusSchema)
+  },
+  openReleasePage(): Promise<void> {
+    return invoke(() => bridge().openReleasePage(), ResultShownSchema).then(() => undefined)
+  },
+  openDiagnosticsDirectory(): Promise<void> {
+    return invoke(() => bridge().openDiagnosticsDirectory(), ResultShownSchema).then(
+      () => undefined
+    )
+  },
+  runReview(request: ReviewRequest): Promise<ReviewResult> {
+    return invoke(() => bridge().runReview(request), ReviewResultSchema)
+  },
+  cancelReview(taskId: string): Promise<void> {
+    return invoke(() => bridge().cancelReview(taskId), TaskCancellationResultSchema).then(
+      () => undefined
+    )
+  },
+  previewGeneration(request: GenerationPreviewRequest): Promise<GenerationPreview> {
+    return invoke(() => bridge().previewGeneration(request), GenerationPreviewSchema)
+  },
+  runGeneration(request: GenerationRequest): Promise<GenerationResult> {
+    return invoke(() => bridge().runGeneration(request), GenerationResultSchema)
   }
 })
 

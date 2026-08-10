@@ -105,8 +105,10 @@ export class SanitizationJob {
       try {
         const inspection = await adapter.inspect(selected.snapshot, signal)
         const blockers = [...inspection.blockers]
+        let previewItems: PreviewFile['items'] = []
         if (blockers.length === 0) {
           const plan = await adapter.createPlan(selected.snapshot, inspection, signal)
+          previewItems = plan.previewItems ? [...plan.previewItems] : []
           plannedFiles.push({
             inputId: selected.inputId,
             snapshot: selected.snapshot,
@@ -114,7 +116,9 @@ export class SanitizationJob {
             plan
           })
         }
-        previewFiles.push(toPreviewFile(selected.inputId, selected.snapshot, inspection, blockers))
+        previewFiles.push(
+          toPreviewFile(selected.inputId, selected.snapshot, inspection, blockers, previewItems)
+        )
       } catch (error) {
         if (error instanceof DocumentSafetyError && error.appError.code !== 'TASK_CANCELLED') {
           previewFiles.push({
@@ -123,6 +127,7 @@ export class SanitizationJob {
             documentType: selected.snapshot.documentType,
             size: selected.snapshot.size,
             fields: [],
+            items: [],
             warnings: [],
             blockers: [error.appError]
           })
@@ -356,7 +361,8 @@ function toPreviewFile(
   inputId: string,
   snapshot: InputSnapshot,
   inspection: DocumentInspection,
-  blockers: PreviewFile['blockers']
+  blockers: PreviewFile['blockers'],
+  items: PreviewFile['items'] = []
 ): PreviewFile {
   return {
     inputId,
@@ -364,6 +370,7 @@ function toPreviewFile(
     documentType: snapshot.documentType,
     size: snapshot.size,
     fields: inspection.fields.map((field) => ({ ...field })),
+    items,
     warnings: [...inspection.warnings],
     blockers
   }
@@ -404,6 +411,7 @@ function digestPlan(
         sha256: planned?.snapshot.sha256 ?? null,
         mtimeMs: planned?.snapshot.mtimeMs ?? null,
         fields: previewFile.fields,
+        items: previewFile.items ?? [],
         blockers: previewFile.blockers.map((blocker) => blocker.code)
       }
     })

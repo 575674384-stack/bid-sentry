@@ -22,22 +22,32 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test --run
+      - run: pnpm test:coverage
       - run: pnpm build
+      - run: git diff --check
       - run: xvfb-run -a pnpm test:e2e
       - run: pnpm package:linux
       - run: pnpm audit:package
-      - run: xvfb-run -a pnpm test:e2e:packaged
+      - run: xvfb-run -a pnpm test:e2e:production
         env:
           BID_SENTRY_PACKAGED_APP: release/linux-unpacked/bid-sentry
+      - run: (cd release && sha256sum *.AppImage *.deb latest*.yml) > release/SHA256SUMS
+      - run: pnpm package:e2e:linux
+      - run: xvfb-run -a pnpm test:e2e:packaged
+        env:
+          BID_SENTRY_PACKAGED_E2E_APP: ${{ github.workspace }}/.e2e-release/linux-unpacked/bid-sentry-e2e
       - uses: actions/upload-artifact@v4
         with:
           name: bid-sentry-linux-x64
           path: |
             release/*.AppImage
             release/*.deb
+            release/latest*.yml
+            release/SHA256SUMS
           if-no-files-found: error
 
   windows:
@@ -54,18 +64,38 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test --run
+      - run: pnpm test:coverage
       - run: pnpm build
+      - run: git diff --check
       - run: pnpm test:e2e
       - run: pnpm package:win
       - run: pnpm audit:package
-      - run: pnpm test:e2e:packaged
+      - shell: pwsh
+        run: |
+          $env:BID_SENTRY_PACKAGED_APP = "$env:GITHUB_WORKSPACE\release\win-unpacked\bid-sentry.exe"
+          pnpm test:e2e:production
+      - shell: pwsh
+        run: |
+          $files = @(Get-ChildItem release -File | Where-Object { $_.Extension -in @('.exe', '.7z') -or $_.Name -like 'latest*.yml' })
+          if ($files.Count -eq 0) { throw 'No Windows release assets were produced.' }
+          $files | Get-FileHash -Algorithm SHA256 | ForEach-Object { "{0}  {1}" -f $_.Hash.ToLowerInvariant(), $_.Name } | Set-Content -Encoding ascii release/SHA256SUMS
+      - run: pnpm package:e2e:win
+      - shell: pwsh
+        run: |
+          $env:BID_SENTRY_PACKAGED_E2E_APP = "$env:GITHUB_WORKSPACE\.e2e-release\win-unpacked\bid-sentry-e2e.exe"
+          pnpm test:e2e:packaged
         env:
-          BID_SENTRY_PACKAGED_APP: release/win-unpacked/bid-sentry.exe
+          PLAYWRIGHT_HTML_OPEN: never
       - uses: actions/upload-artifact@v4
         with:
           name: bid-sentry-windows-x64
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/*.7z
+            release/latest*.yml
+            release/SHA256SUMS
           if-no-files-found: error

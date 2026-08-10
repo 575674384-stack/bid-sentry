@@ -6,6 +6,9 @@ import {
   SanitizationTaskResultSchema
 } from './sanitization'
 import { AiConnectionTestResultSchema, AiSettingsSchema, AiSettingsUpdateSchema } from './settings'
+import { UpdateActionResultSchema, UpdateStatusSchema } from './updates'
+import { ReviewRequestSchema, ReviewResultSchema } from './review'
+import { GenerationPreviewSchema, GenerationResultSchema } from './generation'
 
 export const MAX_IPC_REQUEST_BYTES = 64 * 1024
 export const MAX_IPC_RESPONSE_BYTES = 4 * 1024 * 1024
@@ -21,7 +24,17 @@ export const IPC_CHANNELS = Object.freeze({
   sanitizeExecute: 'sanitize:execute',
   taskCancel: 'task:cancel',
   taskSubscribe: 'task:subscribe',
-  filesOpenResult: 'files:open-result'
+  filesOpenResult: 'files:open-result',
+  diagnosticsOpen: 'diagnostics:open',
+  updatesGet: 'updates:get',
+  updatesCheck: 'updates:check',
+  updatesDownload: 'updates:download',
+  updatesInstall: 'updates:install',
+  updatesOpenRelease: 'updates:open-release',
+  reviewRun: 'review:run',
+  reviewCancel: 'review:cancel',
+  generationPreview: 'generation:preview',
+  generationRun: 'generation:run'
 } as const)
 
 export const EmptyPayloadSchema = z.object({}).strict()
@@ -76,6 +89,10 @@ export const OpenResultFileRequestSchema = z
   })
   .strict()
 
+export const UpdatesOpenReleaseRequestSchema = EmptyPayloadSchema
+export const ReviewRunRequestSchema = ReviewRequestSchema
+export const ReviewCancelRequestSchema = TaskCancelRequestSchema
+
 export const TaskCancellationResultSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -99,7 +116,17 @@ export const IPC_RESPONSE_DATA_SCHEMAS = Object.freeze({
   sanitizePreview: SanitizationPreviewSchema,
   sanitizeExecute: SanitizationTaskResultSchema,
   taskCancel: TaskCancellationResultSchema,
-  filesOpenResult: ResultShownSchema
+  filesOpenResult: ResultShownSchema,
+  diagnosticsOpen: ResultShownSchema,
+  updatesGet: UpdateStatusSchema,
+  updatesCheck: UpdateStatusSchema,
+  updatesDownload: UpdateStatusSchema,
+  updatesInstall: UpdateStatusSchema,
+  updatesOpenRelease: UpdateActionResultSchema,
+  reviewRun: ReviewResultSchema,
+  reviewCancel: TaskCancellationResultSchema,
+  generationPreview: GenerationPreviewSchema,
+  generationRun: GenerationResultSchema
 })
 
 export const IpcRequestEnvelopeSchema = z

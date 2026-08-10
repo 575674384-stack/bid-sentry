@@ -19,7 +19,8 @@ export async function verifySanitizedPdf(
   inputPath: string,
   inputSha256: string,
   outputPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  expectedReplacements?: Readonly<Record<string, string>>
 ): Promise<VerificationReport> {
   const outputSha256 = await sha256File(outputPath, signal).catch((error: unknown) => {
     rethrowCancellation(error)
@@ -33,7 +34,7 @@ export async function verifySanitizedPdf(
     const outputOccurrences = scanPdfMetadata(output).occurrences
     const outputPreservation = pdfMetadataPreservationFingerprint(output)
     const outputStructure = fingerprintPdfStructure(output)
-    checks.push(metadataCheck(source, outputOccurrences, outputPreservation))
+    checks.push(metadataCheck(source, outputOccurrences, outputPreservation, expectedReplacements))
     checks.push(structureCheck(source.structure, outputStructure))
     checks.push(attachmentCheck(source.structure, outputStructure))
   } catch (error) {
@@ -70,7 +71,8 @@ async function buildSourceVerificationSnapshot(
 function metadataCheck(
   source: SourceVerificationSnapshot,
   outputOccurrences: readonly PdfMetadataOccurrence[],
-  outputPreservation: PdfMetadataPreservationFingerprint
+  outputPreservation: PdfMetadataPreservationFingerprint,
+  expectedReplacements?: Readonly<Record<string, string>>
 ): VerificationCheck {
   const outputByLocator = new Map(
     outputOccurrences.map((occurrence) => [occurrence.locator, occurrence])
@@ -94,6 +96,10 @@ function metadataCheck(
       outputOccurrence.originalValue === sourceOccurrence.originalValue
     ) {
       passed = false
+    }
+    if (expectedReplacements) {
+      const expected = expectedReplacements[sourceOccurrence.locator]
+      if (expected === undefined || outputOccurrence.originalValue !== expected) passed = false
     }
     const kind = sourceOccurrence.replacementKind
     if (kind && !['timestamp', 'trailer-id'].includes(kind)) {

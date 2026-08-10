@@ -1,6 +1,7 @@
 node_modules/
 out/
 release/
+.e2e-release/
 coverage/
 playwright-report/
 test-results/
@@ -9,6 +10,7 @@ test-results/
 .env
 .env.*
 settings.v1.json
+settings.v2.json
 secrets.v1.bin
 test-apikey.md
 .bid-sentry-tmp-*

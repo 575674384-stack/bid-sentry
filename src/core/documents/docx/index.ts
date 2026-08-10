@@ -5,6 +5,7 @@ import { readDocxArchive } from './archive'
 import { inspectDocxArchive, type DocxInspection } from './inspect'
 import { sanitizeDocxToPath } from './sanitize'
 import { verifySanitizedDocx } from './verify'
+import { createDocxMetadataPlan } from './metadata'
 
 export interface DocxSanitizationPlan extends DocumentSanitizationPlan {
   documentType: 'docx'
@@ -23,21 +24,30 @@ export const docxDocumentAdapter: DocumentAdapter<DocxInspection, DocxSanitizati
     if (inspection.documentType !== 'docx') {
       throw new DocumentSafetyError('INTERNAL_ERROR')
     }
+    const plan = createDocxMetadataPlan(await readDocxArchive(input.absolutePath, signal))
     return {
       documentType: 'docx',
       inputSha256: input.sha256,
-      fields: inspection.fields.map((field) => ({ ...field }))
+      fields: plan.fields.length ? plan.fields : inspection.fields.map((field) => ({ ...field })),
+      previewItems: plan.items,
+      replacementValues: plan.replacementValues
     }
   },
 
   async sanitizeToTemp(input, plan, temporaryPath, signal) {
     assertMatchingPlan(input, plan, signal)
-    await sanitizeDocxToPath(input.absolutePath, temporaryPath, signal)
+    await sanitizeDocxToPath(input.absolutePath, temporaryPath, signal, plan.replacementValues)
   },
 
   async verify(input, plan, temporaryPath, signal) {
     assertMatchingPlan(input, plan, signal)
-    return verifySanitizedDocx(input.absolutePath, input.sha256, temporaryPath, signal)
+    return verifySanitizedDocx(
+      input.absolutePath,
+      input.sha256,
+      temporaryPath,
+      signal,
+      plan.replacementValues
+    )
   }
 }
 

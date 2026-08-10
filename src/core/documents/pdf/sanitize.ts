@@ -7,14 +7,15 @@ import { sanitizePdfMetadata } from './metadata'
 export async function sanitizePdfToPath(
   inputPath: string,
   outputPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  replacementValues?: Readonly<Record<string, string>>
 ): Promise<void> {
   await assertSafeTemporaryOutput(inputPath, outputPath)
   const { document } = await loadSafePdfFile(inputPath, signal)
   const mapping = new TaskRandomMapping()
 
   try {
-    sanitizePdfMetadata(document, mapping)
+    sanitizePdfMetadata(document, mapping, replacementValues)
     throwIfAborted(signal)
     const bytes = await document.save({
       useObjectStreams: false,

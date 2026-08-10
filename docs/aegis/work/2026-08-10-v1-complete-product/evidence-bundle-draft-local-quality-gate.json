@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "local-quality-gate",
+  "type": "command",
+  "source": "pnpm format:check; pnpm lint; pnpm typecheck; pnpm test --run; pnpm test:coverage; pnpm build; git diff --check",
+  "summary": "Static checks, 25 test files, 150 passed plus one optional skip, coverage and production build passed.",
+  "verifier": "local shell run 2026-08-10"
+}

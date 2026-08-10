@@ -1,0 +1,141 @@
+.review-page .button.primary {
+  margin-top: 18px;
+}
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.review-file-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.review-file-grid label {
+  display: grid;
+  gap: 7px;
+}
+.review-file-grid label:last-child {
+  grid-column: 1 / -1;
+}
+.review-file-grid label > span {
+  color: #33475f;
+  font-size: 12px;
+  font-weight: 750;
+}
+.review-file-grid select,
+.review-file-grid input {
+  min-height: 43px;
+  padding: 9px 11px;
+  border: 1px solid #cfd7e2;
+  border-radius: 9px;
+  color: #23344c;
+  background: #fff;
+  font-size: 13px;
+}
+.review-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 13px;
+  border: 1px solid #d6e1f7;
+  border-radius: 10px;
+  background: #f6f9ff;
+}
+.review-consent input {
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  accent-color: var(--blue);
+}
+.review-consent span {
+  display: grid;
+  gap: 4px;
+}
+.review-consent strong {
+  color: #2b4468;
+  font-size: 12px;
+}
+.review-consent small {
+  color: #6b7b91;
+  font-size: 11px;
+}
+.findings-list {
+  display: grid;
+  gap: 10px;
+}
+.finding-card {
+  padding: 13px;
+  border: 1px solid #e0e6ef;
+  border-left: 4px solid #7b8aa1;
+  border-radius: 10px;
+  background: #fff;
+}
+.finding-card.severity-error {
+  border-left-color: #cf4e59;
+  background: #fffafa;
+}
+.finding-card.severity-warning {
+  border-left-color: #d99427;
+  background: #fffdf6;
+}
+.finding-card.severity-needs-review {
+  border-left-color: #8b68c5;
+  background: #fbf9ff;
+}
+.finding-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.finding-heading > span {
+  color: #6b7484;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.finding-heading strong {
+  flex: 1 1 300px;
+  color: #2e405a;
+  font-size: 13px;
+}
+.finding-heading small {
+  color: #8390a1;
+  font-size: 10px;
+}
+.finding-card p {
+  margin: 8px 0;
+  color: #596b82;
+  font-size: 12px;
+}
+.finding-evidence {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid #eef1f5;
+  color: #718097;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.finding-evidence span {
+  overflow-wrap: anywhere;
+}
+.report-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 16px;
+  color: #61728a;
+  font-size: 11px;
+}
+@media (max-width: 760px) {
+  .review-file-grid {
+    grid-template-columns: 1fr;
+  }
+  .review-file-grid label:last-child {
+    grid-column: auto;
+  }
+}

@@ -7,13 +7,19 @@ import { ElectronSafeStorageSecretStore } from './settings/secretStore'
 import { SettingsService } from './settings/settingsService'
 import { TaskManager, type ManagedWorkerProcess } from './tasks/taskManager'
 import { WorkspaceJournal } from './tasks/workspaceJournal'
+import { DiagnosticRecorder } from './diagnostics/diagnosticRecorder'
+import { WindowController } from './app/windowController'
+import { TrayController } from './app/trayController'
+import { UpdateService, type NativeUpdaterLike } from './updates/updateService'
+import { ReviewTaskManager } from './tasks/reviewTaskManager'
+import { GenerationTaskManager } from './tasks/generationTaskManager'
 import type { E2eHarness } from './e2e/e2eHarness'
 
 declare const __BID_SENTRY_E2E_BUILD__: boolean
 
 const currentDirectory = fileURLToPath(new URL('.', import.meta.url))
 
-function createWindow(): BrowserWindow {
+function createWindow(onReady?: () => void): BrowserWindow {
   const window = new BrowserWindow({
     width: 1180,
     height: 760,
@@ -30,6 +36,7 @@ function createWindow(): BrowserWindow {
   })
 
   window.once('ready-to-show', () => window.show())
+  window.once('ready-to-show', () => onReady?.())
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) {
       void shell.openExternal(url)
@@ -52,6 +59,8 @@ let disposeIpc: (() => void) | null = null
 let activeTaskManager: TaskManager | null = null
 let shutdownStarted = false
 let shutdownComplete = false
+let activeWindowController: WindowController | null = null
+let activeTrayController: TrayController | null = null
 
 async function startApplication(): Promise<void> {
   const e2eHarness = await loadE2eHarness()
@@ -60,23 +69,74 @@ async function startApplication(): Promise<void> {
   app.setAppUserModelId('io.github.bidsentry.desktop')
   const userDataDirectory = app.getPath('userData')
   const settingsService = new SettingsService(
-    join(userDataDirectory, 'settings.v1.json'),
+    join(userDataDirectory, 'settings.v2.json'),
     new ElectronSafeStorageSecretStore(join(userDataDirectory, 'secrets.v1.bin'), safeStorage)
   )
+  const initialSettings = await settingsService.getPublicSettings()
+  const packageType =
+    process.platform === 'linux'
+      ? process.env.APPIMAGE
+        ? 'appimage'
+        : 'manual-only'
+      : process.platform === 'win32'
+        ? process.env.PORTABLE_EXECUTABLE_FILE
+          ? 'manual-only'
+          : 'nsis'
+        : 'manual-only'
+  const nativeUpdater = e2eHarness ? undefined : await loadNativeUpdater(packageType)
+  const updateService = new UpdateService({
+    currentVersion: app.getVersion(),
+    ...(nativeUpdater ? { nativeUpdater } : {}),
+    packageType,
+    allowDirectDownload: !app.isPackaged,
+    openDownloaded: (path) => shell.openPath(path)
+  })
   const workspaceJournal = new WorkspaceJournal(
     join(userDataDirectory, 'temporary-workspaces.v1.json')
   )
+  const diagnostics = new DiagnosticRecorder({
+    directory: join(userDataDirectory, 'diagnostics'),
+    appVersion: app.getVersion()
+  })
   await workspaceJournal.recover()
   const taskManager = new TaskManager(() => createWorker(e2eHarness), {
     recordWorkspace: (workspace) => workspaceJournal.add(workspace),
-    forgetWorkspace: (workspace) => workspaceJournal.remove(workspace)
+    forgetWorkspace: (workspace) => workspaceJournal.remove(workspace),
+    diagnostics
   })
+  const reviewTaskManager = new ReviewTaskManager({ settingsService })
+  const generationTaskManager = new GenerationTaskManager()
   activeTaskManager = taskManager
   disposeIpc = registerIpc({
     ipcMain: ipcMain as unknown as IpcMainLike,
     settingsService,
     taskManager,
     appVersion: app.getVersion(),
+    updateService,
+    reviewTaskManager,
+    generationTaskManager,
+    openReleasePage: (url) => {
+      if (url.startsWith('https://github.com/')) void shell.openExternal(url)
+    },
+    openDiagnosticsDirectory: () => {
+      if (!e2eHarness) void shell.openPath(join(userDataDirectory, 'diagnostics'))
+    },
+    onSettingsChanged(settings) {
+      activeWindowController?.setCloseToTray(settings.closeToTray ?? false)
+      if (settings.closeToTray && !activeTrayController) {
+        const window = BrowserWindow.getAllWindows()[0]
+        if (window) {
+          activeTrayController = new TrayController({
+            window,
+            onCheckUpdates: () => void updateService.check(),
+            onQuit: () => activeWindowController?.realQuit()
+          })
+        }
+      } else if (!settings.closeToTray && activeTrayController) {
+        activeTrayController.destroy()
+        activeTrayController = null
+      }
+    },
     async selectInputPaths() {
       if (e2eHarness) return e2eHarness.inputPaths
       const result = await dialog.showOpenDialog({
@@ -102,13 +162,44 @@ async function startApplication(): Promise<void> {
       shell.showItemInFolder(absolutePath)
     }
   })
-  createWindow()
+  const window = createWindow(() => {
+    if (
+      (initialSettings.checkUpdatesOnStartup ?? true) &&
+      !e2eHarness &&
+      process.env.BID_SENTRY_DISABLE_UPDATES !== '1'
+    ) {
+      void updateService.check()
+    }
+  })
+  activeWindowController = new WindowController(window, {
+    closeToTray: initialSettings.closeToTray ?? false,
+    requestQuit: () => app.quit()
+  })
+  if (initialSettings.closeToTray) {
+    activeTrayController = new TrayController({
+      window,
+      onCheckUpdates: () => void updateService.check(),
+      onQuit: () => activeWindowController?.realQuit()
+    })
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
     }
   })
+}
+
+async function loadNativeUpdater(
+  packageType: 'appimage' | 'nsis' | 'manual-only'
+): Promise<NativeUpdaterLike | undefined> {
+  if (!app.isPackaged || packageType === 'manual-only') return undefined
+  try {
+    const { autoUpdater } = await import('electron-updater')
+    return autoUpdater as unknown as NativeUpdaterLike
+  } catch {
+    return undefined
+  }
 }
 
 function createWorker(e2eHarness: E2eHarness | null): ManagedWorkerProcess {
@@ -132,6 +223,9 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   if (shutdownStarted) return
   shutdownStarted = true
+  activeWindowController?.markQuitting()
+  activeTrayController?.destroy()
+  activeTrayController = null
   disposeIpc?.()
   disposeIpc = null
   void (activeTaskManager?.shutdown() ?? Promise.resolve()).finally(() => {
@@ -142,7 +236,7 @@ app.on('before-quit', (event) => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (process.platform !== 'darwin' && !activeWindowController?.closeToTray) {
     app.quit()
   }
 })

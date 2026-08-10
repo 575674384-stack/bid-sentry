@@ -1,4 +1,5 @@
 import type {
+  AppError,
   SanitizationPreview,
   SanitizationTaskResult,
   SelectedInputFile,
@@ -28,6 +29,7 @@ export interface SanitizerState {
   acknowledged: boolean
   cancelling: boolean
   errorMessage: string | null
+  diagnosticError?: AppError
 }
 
 export type SanitizerAction =
@@ -42,7 +44,7 @@ export type SanitizerAction =
   | { type: 'progress-received'; progress: TaskProgress }
   | { type: 'cancellation-requested' }
   | { type: 'execution-succeeded'; result: SanitizationTaskResult }
-  | { type: 'operation-failed'; message: string }
+  | { type: 'operation-failed'; message: string; error?: AppError }
   | { type: 'operation-notice'; message: string }
   | { type: 'reset' }
 
@@ -173,7 +175,8 @@ export function sanitizerReducer(state: SanitizerState, action: SanitizerAction)
           progress: 0,
           progressMessage: action.progress.message,
           cancelling: false,
-          errorMessage: action.progress.error?.message ?? action.progress.message
+          errorMessage: action.progress.error?.message ?? action.progress.message,
+          ...(action.progress.error ? { diagnosticError: action.progress.error } : {})
         }
       }
       if (state.stage === 'awaiting-confirmation') return state
@@ -224,7 +227,8 @@ export function sanitizerReducer(state: SanitizerState, action: SanitizerAction)
         progress: 0,
         progressMessage: '任务未完成。',
         cancelling: false,
-        errorMessage: action.message
+        errorMessage: action.message,
+        ...(action.error ? { diagnosticError: action.error } : {})
       }
     case 'operation-notice':
       return {

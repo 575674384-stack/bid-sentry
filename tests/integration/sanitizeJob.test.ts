@@ -26,7 +26,7 @@ afterEach(async () => {
 })
 
 describe('SanitizationJob', () => {
-  it('previews selected snapshots without writing files or exposing metadata values', async () => {
+  it('previews selected snapshots without writing files and exposes values only in the active preview', async () => {
     const directory = await createTemporaryDirectory()
     const inputPath = join(directory, 'bid.docx')
     await writeDocxFixture(inputPath)
@@ -42,7 +42,8 @@ describe('SanitizationJob', () => {
       blockers: []
     })
     expect(preview.files[0]?.fields.length).toBeGreaterThan(0)
-    expect(JSON.stringify(preview)).not.toContain(DOCX_FIXTURE_VALUES.person)
+    expect(JSON.stringify(preview)).toContain(DOCX_FIXTURE_VALUES.person)
+    expect(preview.files[0]?.items?.some((item) => item.replacementDisplayValue)).toBe(true)
   })
 
   it('rejects execution without a current confirmed preview and invalidates a bad digest', async () => {

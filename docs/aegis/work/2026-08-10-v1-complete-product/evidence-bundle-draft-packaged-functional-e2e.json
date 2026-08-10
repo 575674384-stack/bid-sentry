@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "packaged-functional-e2e",
+  "type": "command",
+  "source": "pnpm package:e2e:linux; BID_SENTRY_PACKAGED_E2E_APP=.e2e-release/linux-unpacked/bid-sentry-e2e xvfb-run -a pnpm test:e2e:packaged",
+  "summary": "Separate E2E package executed sanitization, bid review and qualification generation and passed.",
+  "verifier": "electron-builder 26.15.3 and Playwright"
+}

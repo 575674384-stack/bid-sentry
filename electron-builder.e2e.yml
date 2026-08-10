@@ -1,0 +1,19 @@
+appId: io.github.bidsentry.desktop.e2e
+productName: Bid Sentry E2E
+asar: true
+compression: normal
+directories:
+  output: .e2e-release
+files:
+  - out/**
+  - package.json
+  - LICENSE
+linux:
+  category: Utility
+  executableName: bid-sentry-e2e
+  target:
+    - dir
+win:
+  executableName: bid-sentry-e2e
+  target:
+    - dir

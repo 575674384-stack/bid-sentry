@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { SanitizerPage } from './features/sanitizer/SanitizerPage'
 import { SettingsPage } from './features/settings/SettingsPage'
+import { ReviewPage } from './features/review/ReviewPage'
+import { GenerationPage } from './features/generation/GenerationPage'
 
-type Page = 'sanitizer' | 'settings'
+type Page = 'sanitizer' | 'review' | 'generation' | 'settings'
 
 const PAGE_COPY: Readonly<Record<Page, { eyebrow: string; title: string; description: string }>> = {
   sanitizer: {
@@ -13,7 +15,17 @@ const PAGE_COPY: Readonly<Record<Page, { eyebrow: string; title: string; descrip
   settings: {
     eyebrow: '本机设置',
     title: '配置 AI 接口',
-    description: '保存自己的 OpenAI 兼容接口，为后续对照审查能力做好准备。'
+    description: '保存自己的 OpenAI 兼容接口，并管理托盘与更新行为。'
+  },
+  review: {
+    eyebrow: '对照审查',
+    title: '检查投标文件错误',
+    description: '对照招标文件提取的固定要求，结合本机规则和可选 AI 辅助发现问题。'
+  },
+  generation: {
+    eyebrow: '资格标预制作',
+    title: '复用招标文件模板',
+    description: '从用户确认的招标模板生成可编辑草稿，固定值有证据，图片用占位符。'
   }
 }
 
@@ -35,6 +47,34 @@ export function App(): React.JSX.Element {
         </div>
 
         <nav className="primary-nav" aria-label="主要功能">
+          <button
+            type="button"
+            className={page === 'review' ? 'active' : ''}
+            aria-current={page === 'review' ? 'page' : undefined}
+            onClick={() => setPage('review')}
+          >
+            <span className="nav-icon" aria-hidden="true">
+              ✓
+            </span>
+            <span>
+              <strong>对照审查</strong>
+              <small>招标 / 投标</small>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={page === 'generation' ? 'active' : ''}
+            aria-current={page === 'generation' ? 'page' : undefined}
+            onClick={() => setPage('generation')}
+          >
+            <span className="nav-icon" aria-hidden="true">
+              ✦
+            </span>
+            <span>
+              <strong>资格标预制作</strong>
+              <small>模板复用</small>
+            </span>
+          </button>
           <button
             type="button"
             className={page === 'sanitizer' ? 'active' : ''}
@@ -72,7 +112,7 @@ export function App(): React.JSX.Element {
             <span>原文件只读 · 验证后发布</span>
           </div>
         </div>
-        <p className="sidebar-version">M1 · 开源本地工具</p>
+        <p className="sidebar-version">v1.0.0 · 开源本地工具</p>
       </aside>
 
       <main className="workspace">
@@ -92,6 +132,12 @@ export function App(): React.JSX.Element {
         </div>
         <div hidden={page !== 'settings'}>
           <SettingsPage />
+        </div>
+        <div hidden={page !== 'review'}>
+          <ReviewPage />
+        </div>
+        <div hidden={page !== 'generation'}>
+          <GenerationPage />
         </div>
       </main>
     </div>

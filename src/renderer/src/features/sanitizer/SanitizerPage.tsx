@@ -1,4 +1,5 @@
 import { FileSelection } from './FileSelection'
+import type { AppError } from '../../../../shared/contracts'
 import { PreviewPanel } from './PreviewPanel'
 import { ResultPanel } from './ResultPanel'
 import { TaskProgress } from './TaskProgress'
@@ -34,6 +35,7 @@ export function SanitizerPage(): React.JSX.Element {
         <p className="step-label">{cancelled ? '任务已取消' : '任务已安全停止'}</p>
         <h2 id="terminal-title">{cancelled ? '没有生成最终文件' : '未发布任何未验证结果'}</h2>
         <p>{state.errorMessage ?? state.progressMessage}</p>
+        {state.diagnosticError ? <DiagnosticDetails error={state.diagnosticError} /> : null}
         <div className="safety-note compact">
           <strong>原文件保持不变</strong>
           <span>临时文件已由任务流程清理；重新开始会创建全新的预览和确认。</span>
@@ -131,6 +133,32 @@ export function SanitizerPage(): React.JSX.Element {
           onCancel={() => void controller.cancel()}
         />
       ) : null}
+    </div>
+  )
+}
+
+function DiagnosticDetails({ error }: { error: AppError }): React.JSX.Element {
+  const summary = [
+    `Bid Sentry ${error.code}`,
+    `阶段: ${error.stage ?? 'unknown'}`,
+    `诊断编号: ${error.detailId ?? '未生成'}`
+  ].join('\n')
+  return (
+    <div className="diagnostic-details">
+      <div>
+        <strong>安全诊断信息</strong>
+        <span>
+          错误码：{error.code} · 阶段：{error.stage ?? 'unknown'}
+        </span>
+        {error.detailId ? <span>诊断编号：{error.detailId}</span> : null}
+      </div>
+      <button
+        className="button text-button"
+        type="button"
+        onClick={() => void navigator.clipboard?.writeText(summary)}
+      >
+        复制安全摘要
+      </button>
     </div>
   )
 }

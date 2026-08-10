@@ -21,7 +21,8 @@ export async function verifySanitizedDocx(
   inputPath: string,
   inputSha256: string,
   outputPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  expectedReplacements?: Readonly<Record<string, string>>
 ): Promise<VerificationReport> {
   const outputSha256 = await sha256File(outputPath, signal).catch((error: unknown) => {
     rethrowCancellation(error)
@@ -34,7 +35,7 @@ export async function verifySanitizedDocx(
     const output = await readDocxArchive(outputPath, signal)
     inspectDocxArchive(output)
     checks.push(packageStructureCheck(source, output))
-    checks.push(metadataCheck(source, output))
+    checks.push(metadataCheck(source, output, expectedReplacements))
     checks.push(contentCheck(source, output))
   } catch (error) {
     rethrowCancellation(error)
@@ -97,7 +98,11 @@ function packageStructureCheck(
   }
 }
 
-function metadataCheck(source: SourceVerificationSnapshot, output: DocxArchive): VerificationCheck {
+function metadataCheck(
+  source: SourceVerificationSnapshot,
+  output: DocxArchive,
+  expectedReplacements?: Readonly<Record<string, string>>
+): VerificationCheck {
   const sourceOccurrences = source.occurrences
   const outputOccurrences = scanDocxMetadata(output).occurrences
   const outputByKey = new Map(
@@ -120,6 +125,10 @@ function metadataCheck(source: SourceVerificationSnapshot, output: DocxArchive):
         outputOccurrence.originalValue === sourceOccurrence.originalValue
       ) {
         passed = false
+      }
+      if (expectedReplacements) {
+        const expected = expectedReplacements[keyFor(sourceOccurrence)]
+        if (expected === undefined || outputOccurrence.originalValue !== expected) passed = false
       }
       if (['person', 'initials', 'organization'].includes(sourceOccurrence.replacementKind ?? '')) {
         const mappingKey = `${sourceOccurrence.replacementKind}|${sourceOccurrence.originalValue}`

@@ -3,6 +3,7 @@ import {
   DocumentTypeSchema,
   MetadataFieldCategorySchema,
   MetadataFieldDescriptorSchema,
+  MetadataPreviewItemSchema,
   ReportFileIdentitySchema
 } from './documents'
 import { AppErrorSchema } from './errors'
@@ -66,6 +67,7 @@ export const SanitizationPreviewFileSchema = z
     documentType: DocumentTypeSchema,
     size: z.number().int().nonnegative(),
     fields: z.array(MetadataFieldDescriptorSchema).max(10_000),
+    items: z.array(MetadataPreviewItemSchema).max(10_000).optional(),
     warnings: z.array(z.string().trim().min(1).max(500)).max(1_000),
     blockers: z.array(AppErrorSchema).max(100)
   })

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-08-10-v1-complete-product",
+  "requiredBaselineRefs": [
+    "docs/aegis/specs/2026-08-09-bid-sentry-design.md",
+    "CONTEXT.md",
+    "docs/aegis/BASELINE-GOVERNANCE.md",
+    "docs/aegis/adr/ADR-0001-verified-document-publication.md",
+    "docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md",
+    "docs/aegis/plans/2026-08-10-v1-complete-product.md"
+  ],
+  "deliveredContextRefs": [
+    "user-confirmed metadata detail C",
+    "user-confirmed tray A",
+    "user-confirmed update A",
+    "user-confirmed single v1.0.0 release"
+  ],
+  "acknowledgedBeforePlanRefs": [
+    "docs/aegis/plans/2026-08-10-v1-complete-product.md"
+  ],
+  "citedInPlanRefs": [
+    "docs/aegis/specs/2026-08-09-bid-sentry-design.md",
+    "docs/aegis/adr/ADR-0001-verified-document-publication.md",
+    "docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md"
+  ],
+  "missingRefs": [
+    "exact user incident DOCX",
+    "Windows CI run for final commit",
+    "Word/WPS/LibreOffice/PDF-reader manual runs"
+  ],
+  "decision": "continue"
+}

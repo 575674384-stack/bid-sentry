@@ -3,6 +3,7 @@ import type {
   DocumentType,
   InputSnapshot,
   MetadataFieldDescriptor,
+  MetadataPreviewItem,
   VerificationReport
 } from '../../shared/contracts'
 
@@ -17,6 +18,9 @@ export interface DocumentSanitizationPlan {
   documentType: DocumentType
   inputSha256: string
   fields: MetadataFieldDescriptor[]
+  previewItems?: MetadataPreviewItem[]
+  /** Values are kept only in the in-memory task plan and never serialized. */
+  replacementValues?: Readonly<Record<string, string>>
 }
 
 export interface DocumentAdapter<

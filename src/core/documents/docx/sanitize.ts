@@ -7,7 +7,8 @@ import { sanitizeDocxMetadata } from './metadata'
 export async function sanitizeDocxToPath(
   inputPath: string,
   outputPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  replacementValues?: Readonly<Record<string, string>>
 ): Promise<void> {
   await assertSafeTemporaryOutput(inputPath, outputPath)
   const archive = await readDocxArchive(inputPath, signal)
@@ -15,7 +16,7 @@ export async function sanitizeDocxToPath(
   const mapping = new TaskRandomMapping()
 
   try {
-    const sanitized = sanitizeDocxMetadata(archive, mapping)
+    const sanitized = sanitizeDocxMetadata(archive, mapping, replacementValues)
     await writeDocxArchive(sanitized.archive, outputPath, signal)
   } finally {
     mapping.destroy()

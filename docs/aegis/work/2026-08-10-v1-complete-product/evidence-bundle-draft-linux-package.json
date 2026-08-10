@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "linux-package",
+  "type": "command",
+  "source": "pnpm package:linux; pnpm audit:package; BID_SENTRY_PACKAGED_APP=release/linux-unpacked/bid-sentry xvfb-run -a pnpm test:e2e:production",
+  "summary": "Linux production package built, ASAR audit passed, and packaged production startup passed.",
+  "verifier": "electron-builder 26.15.3 and Playwright"
+}
