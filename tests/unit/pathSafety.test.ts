@@ -25,7 +25,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 import {
   resolvePathIdentityWithoutSymbolicLinks,
-  resolvePathWithoutSymbolicLinks
+  resolvePathWithoutSymbolicLinks,
+  sameFileSystemIdentity
 } from '../../src/core/documents/pathSafety'
 
 const temporaryDirectories: string[] = []
@@ -40,6 +41,13 @@ afterEach(async () => {
 })
 
 describe('stable canonical path resolution', () => {
+  it('uses stable device and inode identity semantics on Windows hard links', () => {
+    const left = { device: '7', inode: '9', mode: '33152' }
+    const right = { device: '7', inode: '9', mode: '33216' }
+    expect(sameFileSystemIdentity(left, right, 'win32')).toBe(true)
+    expect(sameFileSystemIdentity(left, right, 'linux')).toBe(false)
+  })
+
   it('returns the canonical path for a stable regular file', async () => {
     const directory = await createTemporaryDirectory()
     const filePath = join(directory, 'input.pdf')

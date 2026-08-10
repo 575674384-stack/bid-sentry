@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resolve } from 'node:path'
 import { buildReviewReport } from '../../src/core/review/report'
 import { PathRegistry } from '../../src/main/ipc/pathRegistry'
 
@@ -24,7 +25,7 @@ describe('result capability registry', () => {
       'bid-review.html'
     ])
     expect(registry.resolveResultFile(7, review.files[0]!.fileId)).toBe(
-      '/tmp/bid-sentry-output/bid-review.json'
+      resolve('/tmp/bid-sentry-output/bid-review.json')
     )
     expect(() => registry.resolveResultFile(8, review.files[0]!.fileId)).toThrow()
 

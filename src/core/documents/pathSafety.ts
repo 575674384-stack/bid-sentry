@@ -103,9 +103,18 @@ export function fileSystemIdentityFromBigInts(
 
 export function sameFileSystemIdentity(
   left: FileSystemIdentity,
-  right: FileSystemIdentity
+  right: FileSystemIdentity,
+  platform: NodeJS.Platform = process.platform
 ): boolean {
-  return left.device === right.device && left.inode === right.inode && left.mode === right.mode
+  // Windows reports the permission/type bits inconsistently across path and
+  // hard-link stats.  Device + file ID are the stable identity there; callers
+  // independently require the expected regular-file/directory type.  POSIX
+  // keeps the mode comparison as an additional guard against type changes.
+  return (
+    left.device === right.device &&
+    left.inode === right.inode &&
+    (platform === 'win32' || left.mode === right.mode)
+  )
 }
 
 export function normalizeFileIdentity(
