@@ -722,8 +722,8 @@ export async function cleanupAbandonedTemporaryWorkspace(
   // outputs.  Legacy sanitization entries have no publication list and are
   // intentionally not guessed at here.
   await rollbackJournaledHardLinks(
-    confirmedRoot.canonicalPath,
-    confirmedOutput.canonicalPath,
+    descriptor.rootIdentity,
+    descriptor.outputDirectoryIdentity,
     descriptor.publication?.artifacts ?? []
   )
   const [finalRoot, finalOutput] = await Promise.all([
@@ -761,7 +761,6 @@ async function rollbackDetachedJournaledHardLinks(
   const artifacts = descriptor.publication?.artifacts ?? []
   if (artifacts.length === 0) return
   const outputDirectory = resolve(descriptor.outputDirectory)
-  const workspaceRoot = resolve(descriptor.rootPath)
   const currentOutput = await resolvePathIdentityWithoutSymbolicLinks(outputDirectory).catch(
     (error: unknown) => {
       throw new DocumentSafetyError('INTERNAL_ERROR', error)
@@ -779,11 +778,12 @@ async function rollbackDetachedJournaledHardLinks(
   }
   for (const artifact of artifacts) {
     const outputPath = resolve(artifact.outputPath)
-    const temporaryPath = resolve(artifact.temporaryPath)
-    if (
-      normalizeFileIdentity(dirname(outputPath)) !== normalizeFileIdentity(outputDirectory) ||
-      normalizeFileIdentity(dirname(temporaryPath)) !== normalizeFileIdentity(workspaceRoot)
-    ) {
+    const outputParent = await resolvePathIdentityWithoutSymbolicLinks(dirname(outputPath)).catch(
+      (error: unknown) => {
+        throw new DocumentSafetyError('INTERNAL_ERROR', error)
+      }
+    )
+    if (!sameFileSystemIdentity(outputParent.identity, currentOutput.identity)) {
       throw new DocumentSafetyError('INTERNAL_ERROR')
     }
     if (!artifact.identity || !artifact.outputSha256) continue
@@ -803,18 +803,22 @@ async function rollbackDetachedJournaledHardLinks(
 }
 
 async function rollbackJournaledHardLinks(
-  workspaceRoot: string,
-  outputDirectory: string,
+  workspaceRootIdentity: FileSystemIdentity,
+  outputDirectoryIdentity: FileSystemIdentity,
   artifacts: readonly WorkspacePublicationArtifact[]
 ): Promise<void> {
-  const exactWorkspaceRoot = resolve(workspaceRoot)
-  const exactOutputDirectory = resolve(outputDirectory)
   for (const artifact of artifacts) {
     const outputPath = resolve(artifact.outputPath)
     const temporaryPath = resolve(artifact.temporaryPath)
+    const [outputParent, temporaryParent] = await Promise.all([
+      resolvePathIdentityWithoutSymbolicLinks(dirname(outputPath)),
+      resolvePathIdentityWithoutSymbolicLinks(dirname(temporaryPath))
+    ]).catch((error: unknown) => {
+      throw new DocumentSafetyError('INTERNAL_ERROR', error)
+    })
     if (
-      normalizeFileIdentity(dirname(outputPath)) !== normalizeFileIdentity(exactOutputDirectory) ||
-      normalizeFileIdentity(dirname(temporaryPath)) !== normalizeFileIdentity(exactWorkspaceRoot)
+      !sameFileSystemIdentity(outputParent.identity, outputDirectoryIdentity) ||
+      !sameFileSystemIdentity(temporaryParent.identity, workspaceRootIdentity)
     ) {
       throw new DocumentSafetyError('INTERNAL_ERROR')
     }
