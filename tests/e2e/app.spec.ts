@@ -17,7 +17,7 @@ interface TestApplication {
   page: Page
   root: string
   inputPaths: string[]
-  outputDirectory: string
+  fixturesDirectory: string
   revealLogPath: string
 }
 
@@ -55,10 +55,10 @@ test('uses secure Electron preferences and keeps API keys out of the Renderer', 
       hasRequire: false,
       bridgeVersion: 1
     })
-    const layout = runtimeBoundary
-    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
+    expect(runtimeBoundary.scrollWidth).toBeLessThanOrEqual(runtimeBoundary.clientWidth)
 
-    await application.page.getByRole('button', { name: /AI 设置/ }).click()
+    await application.page.getByRole('button', { name: '设置' }).click()
+    await expect(application.page.getByRole('heading', { name: '设置', exact: true })).toBeVisible()
     const baseUrl = application.page.getByLabel('Base URL')
     const model = application.page.getByLabel('模型名称')
     const apiKey = application.page.getByRole('textbox', { name: /^API Key/ })
@@ -75,8 +75,8 @@ test('uses secure Electron preferences and keeps API keys out of the Renderer', 
     await expect(apiKey).toHaveValue('')
     await expect(application.page.locator('body')).not.toContainText('synthetic-e2e-key')
 
-    await application.page.getByRole('button', { name: /隐私清洗/ }).click()
-    await application.page.getByRole('button', { name: /AI 设置/ }).click()
+    await application.page.getByRole('button', { name: '隐私清洗' }).click()
+    await application.page.getByRole('button', { name: '设置' }).click()
     await expect(application.page.getByRole('textbox', { name: /^API Key/ })).toHaveValue('')
   } finally {
     await closeTestApplication(application)
@@ -93,44 +93,48 @@ test('sanitizes a synthetic DOCX through the real Preload, IPC, Worker, and resu
   try {
     await application.page.getByRole('button', { name: '选择文件' }).click()
     await expect(application.page.getByText('synthetic-bid-01.docx')).toBeVisible()
-    await application.page.getByRole('button', { name: '选择输出目录' }).click()
-    await expect(application.page.getByText('output')).toBeVisible()
+    await expect(application.page.getByText(/输出位置：与原文件同目录/)).toBeVisible()
 
-    await application.page.getByRole('button', { name: '生成清洗预览' }).click()
-    await expect(application.page.getByRole('heading', { name: '检查修改范围' })).toBeVisible()
-    await expect(application.page.locator('.metadata-table')).toContainText(
+    await application.page.getByRole('button', { name: '生成安全预览' }).click()
+    await expect(application.page.getByRole('heading', { name: '清洗预览' })).toBeVisible()
+    await expect(application.page.getByTestId('metadata-table')).toContainText(
       DOCX_FIXTURE_VALUES.person
     )
-    await expect(application.page.locator('.metadata-table')).toContainText('User-')
-    const execute = application.page.getByRole('button', { name: '开始安全清洗' })
+    await expect(application.page.getByTestId('metadata-table')).toContainText('User-')
+    await expect(application.page.getByText(/保留原值/).first()).toBeVisible()
+
+    const execute = application.page.getByRole('button', { name: '确认并开始清洗' })
     await expect(execute).toBeDisabled()
-    await application.page.getByRole('checkbox', { name: /我已查看修改类别/ }).check()
+    await application.page.getByRole('checkbox', { name: /我已核对预览内容/ }).check()
     await expect(execute).toBeEnabled()
     await execute.click()
 
     await expect(
-      application.page.getByRole('heading', { name: '全部文件已通过强制验证' })
+      application.page.getByRole('heading', { name: '清洗完成，全部文件已通过验证' })
     ).toBeVisible({ timeout: 30_000 })
-    await expect(application.page.getByText('原文件未被修改。')).toBeVisible()
+    await expect(application.page.getByText(/原文件未被修改/)).toBeVisible()
 
-    const outputNames = (await readdir(application.outputDirectory)).sort()
-    expect(outputNames.filter((name) => name.endsWith('_sanitized.docx'))).toHaveLength(1)
+    const fixturesDirectory = application.fixturesDirectory
+    const outputNames = (await readdir(fixturesDirectory)).sort()
+    expect(outputNames.filter((name) => name.endsWith('_已清洗.docx'))).toHaveLength(1)
     expect(outputNames.filter((name) => name.endsWith('.json'))).toHaveLength(1)
     expect(outputNames.filter((name) => name.endsWith('.html'))).toHaveLength(1)
 
     const reportName = outputNames.find((name) => name.endsWith('.json'))
     if (!reportName) throw new Error('JSON report is missing.')
-    const reportText = await readFile(join(application.outputDirectory, reportName), 'utf8')
+    const reportText = await readFile(join(fixturesDirectory, reportName), 'utf8')
     expect(reportText).not.toContain(DOCX_FIXTURE_VALUES.person)
     expect(reportText).not.toContain(inputPath)
 
+    const sanitizedName = outputNames.find((name) => name.endsWith('_已清洗.docx'))
+    if (!sanitizedName) throw new Error('Sanitized output is missing.')
     const revealButton = application.page.getByRole('button', {
-      name: /在文件夹中显示 synthetic-bid-01_sanitized\.docx/
+      name: `在文件夹中显示 ${sanitizedName}`
     })
     await revealButton.click()
     await expect
       .poll(async () => readOptionalText(application.revealLogPath))
-      .toContain('synthetic-bid-01_sanitized.docx')
+      .toContain(sanitizedName)
 
     expect(await fileIdentity(inputPath)).toEqual(before)
   } finally {
@@ -140,18 +144,28 @@ test('sanitizes a synthetic DOCX through the real Preload, IPC, Worker, and resu
 
 test('cancels an executing task without publishing output', async () => {
   const application = await launchTestApplication({ inputCount: 2, executeDelayMs: 2_000 })
+  const fixturesDirectory = application.fixturesDirectory
 
   try {
     await application.page.getByRole('button', { name: '选择文件' }).click()
-    await application.page.getByRole('button', { name: '选择输出目录' }).click()
-    await application.page.getByRole('button', { name: '生成清洗预览' }).click()
-    await expect(application.page.getByRole('heading', { name: '检查修改范围' })).toBeVisible()
-    await application.page.getByRole('checkbox', { name: /我已查看修改类别/ }).check()
-    await application.page.getByRole('button', { name: '开始安全清洗' }).click()
+    await application.page.getByRole('button', { name: '生成安全预览' }).click()
+    await expect(application.page.getByRole('heading', { name: '清洗预览' })).toBeVisible()
+    await application.page.getByRole('checkbox', { name: /我已核对预览内容/ }).check()
+    await application.page.getByRole('button', { name: '确认并开始清洗' }).click()
     await application.page.getByRole('button', { name: '取消任务' }).click()
 
-    await expect(application.page.getByRole('heading', { name: '没有生成最终文件' })).toBeVisible()
-    await expect.poll(() => readdir(application.outputDirectory)).toEqual([])
+    await expect(application.page.getByRole('heading', { name: '任务已取消' })).toBeVisible()
+    await expect(application.page.getByText(/没有生成或替换任何文件/)).toBeVisible()
+    await expect
+      .poll(async () => readdir(fixturesDirectory))
+      .toEqual(expect.arrayContaining(['synthetic-bid-01.docx', 'synthetic-bid-02.docx']))
+    await expect
+      .poll(async () =>
+        (await readdir(fixturesDirectory)).filter(
+          (name) => name.endsWith('_已清洗.docx') || name.endsWith('.json')
+        )
+      )
+      .toEqual([])
   } finally {
     await closeTestApplication(application)
   }
@@ -160,16 +174,30 @@ test('cancels an executing task without publishing output', async () => {
 test('runs the deterministic bid review workflow and writes an evidence report', async () => {
   const application = await launchTestApplication({ inputCount: 2 })
   try {
-    await application.page.getByRole('button', { name: /对照审查/ }).click()
-    await application.page.getByRole('button', { name: '选择两个文件' }).click()
-    await application.page.getByRole('button', { name: '选择报告目录' }).click()
-    await application.page.getByLabel('确认的投标单位名称').fill('示例投标单位')
-    await application.page.getByRole('button', { name: '开始对照审查' }).click()
+    await application.page.getByRole('button', { name: '对照审查' }).click()
+    await application.page.getByRole('button', { name: '选择文件' }).click()
+    await expect(
+      application.page
+        .getByTestId('review-page')
+        .locator('.file-row')
+        .getByText('synthetic-bid-01.docx')
+    ).toBeVisible()
+    await expect(
+      application.page
+        .getByTestId('review-page')
+        .locator('.file-row')
+        .getByText('synthetic-bid-02.docx')
+    ).toBeVisible()
+    await application.page
+      .getByTestId('review-page')
+      .getByLabel('投标单位名称')
+      .fill('示例投标单位')
+    await application.page.getByRole('button', { name: '开始审查' }).click()
     await expect(application.page.getByRole('heading', { name: '审查结果' })).toBeVisible({
       timeout: 30_000
     })
     await expect
-      .poll(async () => readdir(application.outputDirectory))
+      .poll(async () => readdir(application.fixturesDirectory))
       .toContainEqual(expect.stringMatching(/^bid-review-.*\.json$/u))
   } finally {
     await closeTestApplication(application)
@@ -177,28 +205,41 @@ test('runs the deterministic bid review workflow and writes an evidence report',
 })
 
 test('generates a qualification DOCX from a confirmed template candidate', async () => {
-  const application = await launchTestApplication({ inputCount: 1, qualificationTemplate: true })
+  const application = await launchTestApplication({
+    inputCount: 1,
+    qualificationTemplate: true
+  })
   try {
-    await application.page.getByRole('button', { name: /资格标预制作/ }).click()
+    await application.page.getByRole('button', { name: '资格标预制作' }).click()
     await application.page.getByRole('button', { name: '选择招标文件' }).click()
-    await application.page.getByRole('button', { name: '选择输出目录' }).click()
-    await application.page
-      .locator('.generation-page')
-      .getByLabel('投标单位名称')
-      .fill('示例投标单位')
-    await application.page.getByRole('button', { name: '识别模板并生成填充计划' }).click()
-    await expect(application.page.getByRole('heading', { name: '确认模板和填充动作' })).toBeVisible(
-      { timeout: 30_000 }
-    )
-    await application.page.locator('.candidate-card').first().click()
-    await application.page.getByRole('checkbox', { name: /我已确认模板范围和填充计划/ }).check()
-    await application.page.getByRole('button', { name: '确认并生成 DOCX 草稿' }).click()
+    const generationPage = application.page.getByTestId('generation-page')
+    await expect(
+      generationPage.locator('.file-row').getByText('synthetic-bid-01.docx')
+    ).toBeVisible()
+    await expect(generationPage.getByText(/synthetic-bid-01_资格标草稿\.docx/u)).toBeVisible()
+    await generationPage.getByRole('button', { name: '开始分析' }).click()
+    await expect(application.page.getByRole('heading', { name: '确认模板' })).toBeVisible({
+      timeout: 30_000
+    })
+    await generationPage.getByTestId('generation-candidate').first().click()
+    await generationPage.getByRole('button', { name: '确认模板，填写信息' }).click()
+    await expect(application.page.getByRole('heading', { name: '填写信息' })).toBeVisible()
+    await generationPage.getByLabel('投标单位名称').fill('示例投标单位')
+    await generationPage.getByRole('button', { name: '生成填充计划' }).click()
+    await expect(application.page.getByRole('heading', { name: '确认填充计划' })).toBeVisible({
+      timeout: 30_000
+    })
+    await application.page.getByRole('checkbox', { name: /我已确认填充计划/ }).check()
+    await application.page.getByRole('button', { name: '确认并生成' }).click()
     await expect(application.page.getByRole('heading', { name: '资格标草稿已生成' })).toBeVisible({
       timeout: 30_000
     })
     await expect
-      .poll(async () => readdir(application.outputDirectory))
-      .toContainEqual(expect.stringMatching(/资格标草稿\.docx$/u))
+      .poll(async () => readdir(application.fixturesDirectory))
+      .toContainEqual(expect.stringMatching(/synthetic-bid-01_资格标草稿\.docx$/u))
+    await expect
+      .poll(async () => readdir(application.fixturesDirectory))
+      .toContainEqual(expect.stringMatching(/^qualification-generation-.*\.json$/u))
   } finally {
     await closeTestApplication(application)
   }
@@ -209,21 +250,21 @@ test('preserves an awaiting preview across navigation and releases it explicitly
 
   try {
     await application.page.getByRole('button', { name: '选择文件' }).click()
-    await application.page.getByRole('button', { name: '生成清洗预览' }).click()
-    await expect(application.page.getByRole('heading', { name: '检查修改范围' })).toBeVisible()
+    await application.page.getByRole('button', { name: '生成安全预览' }).click()
+    await expect(application.page.getByRole('heading', { name: '清洗预览' })).toBeVisible()
 
-    await application.page.getByRole('button', { name: /AI 设置/ }).click()
-    await expect(application.page.getByRole('heading', { name: '配置 AI 接口' })).toBeVisible()
-    await application.page.getByRole('button', { name: /隐私清洗/ }).click()
-    await expect(application.page.getByRole('heading', { name: '检查修改范围' })).toBeVisible()
+    await application.page.getByRole('button', { name: '设置' }).click()
+    await expect(application.page.getByRole('heading', { name: '连接设置' })).toBeVisible()
+    await application.page.getByRole('button', { name: '隐私清洗' }).click()
+    await expect(application.page.getByRole('heading', { name: '清洗预览' })).toBeVisible()
 
-    await application.page.getByRole('button', { name: '放弃本次预览' }).click()
-    await expect(application.page.getByRole('heading', { name: '没有生成最终文件' })).toBeVisible()
-    await application.page.getByRole('button', { name: '返回文件选择' }).click()
+    await application.page.getByRole('button', { name: '放弃预览' }).click()
+    await expect(application.page.getByRole('heading', { name: '任务已取消' })).toBeVisible()
+    await application.page.getByRole('button', { name: '返回并重新选择' }).click()
 
     await application.page.getByRole('button', { name: '选择文件' }).click()
-    await application.page.getByRole('button', { name: '生成清洗预览' }).click()
-    await expect(application.page.getByRole('heading', { name: '检查修改范围' })).toBeVisible()
+    await application.page.getByRole('button', { name: '生成安全预览' }).click()
+    await expect(application.page.getByRole('heading', { name: '清洗预览' })).toBeVisible()
   } finally {
     await closeTestApplication(application)
   }
@@ -292,12 +333,10 @@ async function launchTestApplication(options: {
 }): Promise<TestApplication> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'bid-sentry-e2e-')))
   const fixturesDirectory = join(root, 'fixtures')
-  const outputDirectory = join(root, 'output')
   const userDataDirectory = join(root, 'user-data')
   const revealLogPath = join(root, 'revealed-files.log')
   await Promise.all([
     mkdir(fixturesDirectory, { recursive: true }),
-    mkdir(outputDirectory, { recursive: true }),
     mkdir(userDataDirectory, { recursive: true })
   ])
 
@@ -326,7 +365,6 @@ async function launchTestApplication(options: {
         BID_SENTRY_E2E: '1',
         BID_SENTRY_E2E_ROOT: root,
         BID_SENTRY_E2E_INPUTS: JSON.stringify(inputPaths),
-        BID_SENTRY_E2E_OUTPUT: outputDirectory,
         BID_SENTRY_E2E_USER_DATA: userDataDirectory,
         BID_SENTRY_E2E_REVEAL_LOG: revealLogPath,
         BID_SENTRY_E2E_EXECUTE_DELAY_MS: String(options.executeDelayMs ?? 0)
@@ -334,7 +372,7 @@ async function launchTestApplication(options: {
     })
     const page = await electronApp.firstWindow()
     await assertApplicationReady(page)
-    return { electronApp, page, root, inputPaths, outputDirectory, revealLogPath }
+    return { electronApp, page, root, inputPaths, fixturesDirectory, revealLogPath }
   } catch (error) {
     await electronApp?.close().catch(() => undefined)
     await rm(root, { recursive: true, force: true })
@@ -343,7 +381,7 @@ async function launchTestApplication(options: {
 }
 
 async function assertApplicationReady(page: Page): Promise<void> {
-  const heading = page.getByRole('heading', { name: '清洗文档隐藏信息' })
+  const heading = page.getByRole('heading', { name: '隐私清洗' })
   try {
     await expect(heading).toBeVisible()
   } catch (startupError) {
