@@ -9,6 +9,7 @@ import {
   type SelectedInputFile
 } from '../../../../shared/contracts'
 import { BidSentryApiError, bidSentryApi, userMessage } from '../../api/bidSentryApi'
+import { onSettingsChanged } from '../settings/settingsEvents'
 
 export const EMPTY_GENERATION_FORM: GenerationUserForm = {
   bidderName: '',
@@ -80,8 +81,12 @@ export function useGenerationFlow(): GenerationFlow {
       .catch(() => {
         if (active) setSettings(null)
       })
+    const unsubscribe = onSettingsChanged((value) => {
+      if (active) setSettings(value)
+    })
     return () => {
       active = false
+      unsubscribe()
     }
   }, [])
 

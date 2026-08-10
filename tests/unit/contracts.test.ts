@@ -13,7 +13,9 @@ import {
   WorkerRequestSchema,
   WorkerResponseSchema,
   createAppError,
-  toSafeAppError
+  toSafeAppError,
+  withDiagnostic,
+  AI_CONFIG_ERROR_MESSAGES
 } from '../../src/shared/contracts'
 
 const TASK_ID = '123e4567-e89b-42d3-a456-426614174000'
@@ -263,5 +265,17 @@ describe('safe errors', () => {
       retryable: false
     })
     expect(normalized.message).toBe('文件结构无效或已损坏。')
+  })
+
+  it('forwards only whitelisted AI configuration detail messages', () => {
+    const specific = createAppError('AI_CONFIG_INVALID', {
+      message: AI_CONFIG_ERROR_MESSAGES.httpsOnly
+    })
+    expect(specific.message).toBe(AI_CONFIG_ERROR_MESSAGES.httpsOnly)
+    expect(toSafeAppError(specific).message).toBe(AI_CONFIG_ERROR_MESSAGES.httpsOnly)
+    expect(withDiagnostic(specific, 'ai-request').message).toBe(AI_CONFIG_ERROR_MESSAGES.httpsOnly)
+
+    const arbitrary = createAppError('AI_CONFIG_INVALID', { message: 'secret path /tmp/x' })
+    expect(arbitrary.message).toBe('AI 接口配置无效。')
   })
 })

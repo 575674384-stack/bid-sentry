@@ -8,6 +8,7 @@ import {
   type AiSettings,
   type AiSettingsUpdate
 } from '../../shared/contracts/settings'
+import { AI_CONFIG_ERROR_MESSAGES, createAppError } from '../../shared/contracts/errors'
 import {
   APP_SETTINGS_SCHEMA_VERSION,
   CompanyProfileSchema,
@@ -17,6 +18,7 @@ import {
   type CompanyProfile,
   type OutputMode
 } from '../../shared/contracts/appSettings'
+import { DocumentSafetyError } from '../../core/documents/fileSafety'
 import type { SecretStore } from './secretStore'
 
 const StoredSettingsSchema = z
@@ -189,23 +191,31 @@ function normalizeCompanyProfile(profile: CompanyProfile | undefined): CompanyPr
 }
 
 export function normalizeAiBaseUrl(value: string): string {
-  const url = new URL(value)
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw aiConfigError(AI_CONFIG_ERROR_MESSAGES.invalidUrl)
+  }
   if (url.username || url.password) {
-    throw new Error('AI Base URL 不能包含用户名或密码。')
+    throw aiConfigError(AI_CONFIG_ERROR_MESSAGES.hasCredentials)
   }
   if (url.search || url.hash) {
-    throw new Error('AI Base URL 不能包含查询参数或片段。')
+    throw aiConfigError(AI_CONFIG_ERROR_MESSAGES.hasQuery)
   }
 
   const isLoopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) {
-    throw new Error('AI Base URL 必须使用 HTTPS；只有本机环回地址可以使用 HTTP。')
+    throw aiConfigError(AI_CONFIG_ERROR_MESSAGES.httpsOnly)
   }
 
   url.pathname = url.pathname.replace(/\/+$/u, '')
   return url.toString().replace(/\/$/u, '')
 }
 
+function aiConfigError(message: string): DocumentSafetyError {
+  return new DocumentSafetyError(createAppError('AI_CONFIG_INVALID', { message }))
+}
 async function writeJsonAtomically(filePath: string, value: StoredSettings): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
   const temporaryPath = `${filePath}.${randomUUID()}.tmp`

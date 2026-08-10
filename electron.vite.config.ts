@@ -15,7 +15,8 @@ if (typeof packageVersion !== 'string' || packageVersion.length === 0) {
 export default defineConfig({
   main: {
     define: {
-      __BID_SENTRY_E2E_BUILD__: JSON.stringify(process.env.BID_SENTRY_E2E === '1')
+      __BID_SENTRY_E2E_BUILD__: JSON.stringify(process.env.BID_SENTRY_E2E === '1'),
+      __BID_SENTRY_VERSION__: JSON.stringify(packageVersion)
     },
     plugins: [externalizeDepsPlugin()],
     build: {

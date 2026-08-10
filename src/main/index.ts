@@ -16,6 +16,7 @@ import { GenerationTaskManager } from './tasks/generationTaskManager'
 import type { E2eHarness } from './e2e/e2eHarness'
 
 declare const __BID_SENTRY_E2E_BUILD__: boolean
+declare const __BID_SENTRY_VERSION__: string
 
 const currentDirectory = fileURLToPath(new URL('.', import.meta.url))
 
@@ -87,7 +88,7 @@ async function startApplication(): Promise<void> {
         : 'manual-only'
   const nativeUpdater = e2eHarness ? undefined : await loadNativeUpdater(packageType)
   const updateService = new UpdateService({
-    currentVersion: app.getVersion(),
+    currentVersion: __BID_SENTRY_VERSION__,
     ...(nativeUpdater ? { nativeUpdater } : {}),
     packageType,
     allowDirectDownload: !app.isPackaged,
@@ -98,7 +99,7 @@ async function startApplication(): Promise<void> {
   )
   const diagnostics = new DiagnosticRecorder({
     directory: join(userDataDirectory, 'diagnostics'),
-    appVersion: app.getVersion()
+    appVersion: __BID_SENTRY_VERSION__
   })
   await workspaceJournal.recover()
   const taskManager = new TaskManager(() => createWorker(e2eHarness), {
@@ -123,7 +124,7 @@ async function startApplication(): Promise<void> {
     ipcMain: ipcMain as unknown as IpcMainLike,
     settingsService,
     taskManager,
-    appVersion: app.getVersion(),
+    appVersion: __BID_SENTRY_VERSION__,
     updateService,
     reviewTaskManager,
     generationTaskManager,

@@ -117,6 +117,40 @@ describe('AI grounding contracts', () => {
     expect(response).toBe(content)
   })
 
+  it('tolerates provider metadata fields in the chat completion envelope', async () => {
+    // Real OpenAI-compatible providers always add id/object/created/model/
+    // usage/index/finish_reason/role — the envelope must strip, not reject.
+    const content = '{"findings":[]}'
+    const response = await requestChatCompletion(
+      {
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'secret-key',
+        model: 'test',
+        timeoutMs: 1000,
+        messages: [{ role: 'user', content: 'DATA' }]
+      },
+      async () =>
+        new Response(
+          JSON.stringify({
+            id: 'chatcmpl-1',
+            object: 'chat.completion',
+            created: 1_700_000_000,
+            model: 'test',
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant', content },
+                finish_reason: 'stop'
+              }
+            ],
+            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+          }),
+          { status: 200 }
+        )
+    )
+    expect(response).toBe(content)
+  })
+
   it('rejects an oversized request message before network access', async () => {
     let called = false
     await expect(

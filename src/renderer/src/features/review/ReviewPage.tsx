@@ -8,6 +8,7 @@ import type {
 import { bidSentryApi, userMessage } from '../../api/bidSentryApi'
 import { IconCompare, IconFile, IconFolder } from '../../components/icons'
 import { Notice, Stepper, formatBytes } from '../../components/ui'
+import { onSettingsChanged } from '../settings/settingsEvents'
 
 const STEPS = [
   { key: 'select', label: '选择文件' },
@@ -54,18 +55,24 @@ export function ReviewPage(): React.JSX.Element {
 
   useEffect(() => {
     let active = true
+    const apply = (settings: AiSettings): void => {
+      setAiSettings(settings)
+      setBidderName((current) => current || settings.companyProfile.bidderName)
+    }
     bidSentryApi
       .getSettings()
       .then((settings) => {
-        if (!active) return
-        setAiSettings(settings)
-        setBidderName((current) => current || settings.companyProfile.bidderName)
+        if (active) apply(settings)
       })
       .catch(() => {
         if (active) setAiSettings(null)
       })
+    const unsubscribe = onSettingsChanged((settings) => {
+      if (active) apply(settings)
+    })
     return () => {
       active = false
+      unsubscribe()
     }
   }, [])
 

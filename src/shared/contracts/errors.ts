@@ -48,6 +48,7 @@ export function withDiagnostic(
   if (error.code === 'TASK_CANCELLED') return error
   return createAppError(error.code, {
     retryable: error.retryable,
+    message: error.message,
     detailId: error.detailId ?? diagnosticUuid(),
     stage: error.stage ?? stage
   })
@@ -78,18 +79,44 @@ const SAFE_MESSAGES: Readonly<Record<AppErrorCode, string>> = Object.freeze({
   INTERNAL_ERROR: '发生内部错误，任务已安全停止。'
 })
 
+/**
+ * Extra whitelisted user-facing messages for AI configuration validation.
+ * Constant, privacy-safe strings; toSafeAppError/withDiagnostic only ever
+ * forward these or the SAFE_MESSAGES default — never arbitrary text.
+ */
+export const AI_CONFIG_ERROR_MESSAGES = Object.freeze({
+  invalidUrl: 'AI Base URL 不是有效地址。',
+  hasCredentials: 'AI Base URL 不能包含用户名或密码。',
+  hasQuery: 'AI Base URL 不能包含查询参数或片段。',
+  httpsOnly: 'AI Base URL 必须使用 HTTPS；只有本机环回地址可以使用 HTTP。'
+} as const)
+
+const ALLOWED_CUSTOM_MESSAGES: ReadonlySet<string> = new Set(
+  Object.values(AI_CONFIG_ERROR_MESSAGES)
+)
+
+function safeMessageFor(code: AppErrorCode, message: string | undefined): string {
+  if (message !== undefined && ALLOWED_CUSTOM_MESSAGES.has(message)) return message
+  return SAFE_MESSAGES[code]
+}
+
 export function createAppError(
   code: AppErrorCode,
   options: {
     retryable?: boolean
     detailId?: string
     stage?: z.infer<typeof DiagnosticStageSchema>
+    /**
+     * Optional whitelisted detail message (see AI_CONFIG_ERROR_MESSAGES).
+     * Anything else silently falls back to the code's default safe message.
+     */
+    message?: string
   } = {}
 ): AppError {
   return AppErrorSchema.parse({
     schemaVersion: 1,
     code,
-    message: SAFE_MESSAGES[code],
+    message: safeMessageFor(code, options.message),
     retryable: options.retryable ?? false,
     ...(options.detailId ? { detailId: options.detailId } : {}),
     ...(options.stage ? { stage: options.stage } : {})
@@ -101,6 +128,7 @@ export function toSafeAppError(error: unknown): AppError {
   return knownError.success
     ? createAppError(knownError.data.code, {
         retryable: knownError.data.retryable,
+        message: knownError.data.message,
         ...(knownError.data.detailId ? { detailId: knownError.data.detailId } : {}),
         ...(knownError.data.stage ? { stage: knownError.data.stage } : {})
       })

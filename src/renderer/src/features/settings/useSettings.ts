@@ -5,6 +5,7 @@ import type {
   AiSettingsUpdate
 } from '../../../../shared/contracts'
 import { bidSentryApi, userMessage } from '../../api/bidSentryApi'
+import { notifySettingsChanged } from './settingsEvents'
 
 export interface SettingsController {
   settings: AiSettings | null
@@ -48,7 +49,9 @@ export function useSettings(): SettingsController {
     setErrorMessage(null)
     setConnectionResult(null)
     try {
-      setSettings(await bidSentryApi.saveSettings(update))
+      const saved = await bidSentryApi.saveSettings(update)
+      setSettings(saved)
+      notifySettingsChanged(saved)
       return true
     } catch (error) {
       setErrorMessage(userMessage(error))
