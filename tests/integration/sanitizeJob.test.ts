@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DocumentAdapter } from '../../src/core/documents/documentAdapter'
+import { resolvePathIdentityWithoutSymbolicLinks } from '../../src/core/documents/pathSafety'
 import {
   DocumentSafetyError,
   buildSanitizedOutputPath,
@@ -106,6 +107,8 @@ describe('SanitizationJob', () => {
     const directory = await createTemporaryDirectory()
     const inputPath = join(directory, 'conflict.pdf')
     await writePdfFixture(inputPath)
+    const canonicalDirectory = (await resolvePathIdentityWithoutSymbolicLinks(directory))
+      .canonicalPath
     const firstOutput = buildSanitizedOutputPath(inputPath, 'suffix', '_已清洗')
     await writeFile(firstOutput, 'owned by user')
     const request = await previewRequest(inputPath)
@@ -116,7 +119,7 @@ describe('SanitizationJob', () => {
       executeRequest(request.taskId, preview.planDigest),
       new AbortController().signal
     )
-    expect(result.outputPaths[0]).toBe(join(directory, 'conflict_已清洗 (2).pdf'))
+    expect(result.outputPaths[0]).toBe(join(canonicalDirectory, 'conflict_已清洗 (2).pdf'))
     expect(await readFile(firstOutput, 'utf8')).toBe('owned by user')
     expect(await temporaryWorkspaceNames(directory)).toEqual([])
   })

@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs'
 import { lstat, realpath } from 'node:fs/promises'
 import { join, parse, resolve, sep, win32 } from 'node:path'
 import { FileSystemIdentitySchema, type FileSystemIdentity } from '../../shared/contracts/documents'
@@ -121,6 +122,16 @@ export function normalizeFileIdentity(
   filePath: string,
   platform: NodeJS.Platform = process.platform
 ): string {
-  const normalized = platform === 'win32' ? win32.resolve(filePath) : resolve(filePath)
-  return platform === 'win32' ? normalized.toLowerCase() : normalized
+  // Canonicalize through the real filesystem when the path exists: Windows
+  // 8.3 short names (RUNNER~1) and the long form (runneradmin) are the same
+  // directory but different strings, so any string-only comparison would
+  // reject a physically identical output location.  Planned outputs that do
+  // not exist yet fall back to a lexical resolve; their inputs always exist
+  // and provide the canonical spelling used by the worker.
+  try {
+    return realpathSync(filePath, { encoding: 'utf8' })
+  } catch {
+    const normalized = platform === 'win32' ? win32.resolve(filePath) : resolve(filePath)
+    return platform === 'win32' ? normalized.toLowerCase() : normalized
+  }
 }

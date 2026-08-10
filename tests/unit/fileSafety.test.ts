@@ -14,7 +14,7 @@ import {
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import * as yazl from 'yazl'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -284,20 +284,22 @@ describe('immutable input and output boundaries', () => {
 
   it('builds a stable output name next to the input and refuses an existing target', async () => {
     const directory = await createTemporaryDirectory()
-    const suffixOutput = buildSanitizedOutputPath('/source/Bid.DOCX', 'suffix', '_已清洗')
+    const inputPath = join(directory, 'Bid.DOCX')
+    const suffixOutput = buildSanitizedOutputPath(inputPath, 'suffix', '_已清洗')
 
-    expect(suffixOutput).toBe(join('/source', 'Bid_已清洗.docx'))
-    const realOutput = buildSanitizedOutputPath(join(directory, 'Bid.DOCX'), 'suffix', '_已清洗')
-    await expect(assertOutputAvailable(realOutput)).resolves.toBeUndefined()
-    await writeFile(realOutput, 'occupied', 'utf8')
-    await expect(assertOutputAvailable(realOutput)).rejects.toMatchObject({
+    expect(suffixOutput).toBe(join(dirname(inputPath), 'Bid_已清洗.docx'))
+    await expect(assertOutputAvailable(suffixOutput)).resolves.toBeUndefined()
+    await writeFile(suffixOutput, 'occupied', 'utf8')
+    await expect(assertOutputAvailable(suffixOutput)).rejects.toMatchObject({
       appError: { code: 'OUTPUT_EXISTS' }
     })
 
     // Overwrite mode reuses the input path itself; the input still exists and
     // is guarded by assertInputUnchanged at publication time.
-    const inputPath = join(directory, 'Bid.docx')
-    expect(buildSanitizedOutputPath(inputPath, 'overwrite', '_ignored')).toBe(inputPath)
+    const overwriteInput = join(directory, 'Bid.docx')
+    expect(buildSanitizedOutputPath(overwriteInput, 'overwrite', '_ignored')).toBe(
+      resolve(overwriteInput)
+    )
   })
 
   it('publishes only a registered file with matching passed verification', async () => {
