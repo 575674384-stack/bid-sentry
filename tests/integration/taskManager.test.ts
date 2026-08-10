@@ -48,7 +48,10 @@ afterEach(async () => {
 describe('TaskManager', () => {
   it('runs the allowed preview and verified execution transitions', async () => {
     const outputDirectory = await createTemporaryDirectory()
-    const workspaceRootPath = join(outputDirectory, '.bid-sentry-tmp-test')
+    const canonicalOutputDirectory = (
+      await resolvePathIdentityWithoutSymbolicLinks(outputDirectory)
+    ).canonicalPath
+    const workspaceRootPath = join(canonicalOutputDirectory, '.bid-sentry-tmp-test')
     const worker = new FakeWorker()
     const cleaned: string[] = []
     const manager = createManager(worker, {

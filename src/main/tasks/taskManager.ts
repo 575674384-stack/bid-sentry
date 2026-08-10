@@ -386,7 +386,10 @@ export class TaskManager {
       if (
         !(await sameRealPath(workspace.outputDirectory, inputDirectories[0] as string)) ||
         !sameFileSystemIdentity(workspace.outputDirectoryIdentity, inputDirectoryIdentity) ||
-        !(await sameRealPath(dirname(resolve(workspace.rootPath)), inputDirectories[0] as string)) ||
+        !(await sameRealPath(
+          dirname(resolve(workspace.rootPath)),
+          inputDirectories[0] as string
+        )) ||
         !basename(resolve(workspace.rootPath)).startsWith('.bid-sentry-tmp-')
       ) {
         await this.#cleanupWorkspace(workspace).catch(() => undefined)
@@ -475,7 +478,10 @@ export class TaskManager {
     }
   }
 
-  async #executionResultMatches(record: TaskRecord, result: WorkerExecutionResult): Promise<boolean> {
+  async #executionResultMatches(
+    record: TaskRecord,
+    result: WorkerExecutionResult
+  ): Promise<boolean> {
     const expectedDirectories = record.inputDirectories
     const completionVerification = record.pendingCompletion?.verification
     const reportVerification = aggregateVerification(
@@ -492,10 +498,7 @@ export class TaskManager {
     }
     for (const [index, outputPath] of result.outputPaths.entries()) {
       if (
-        !(await sameRealPath(
-          dirname(resolve(outputPath)),
-          expectedDirectories[index] as string
-        )) ||
+        !(await sameRealPath(dirname(resolve(outputPath)), expectedDirectories[index] as string)) ||
         basename(outputPath) !== result.report.files[index]?.outputDisplayName
       ) {
         return false
