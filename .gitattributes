@@ -1,0 +1,20 @@
+# Keep repository text files stable across Linux and Windows checkouts.
+* text=auto eol=lf
+
+# Never normalize binary document and application assets.
+*.7z binary
+*.AppImage binary
+*.db binary
+*.doc binary
+*.docm binary
+*.docx binary
+*.gif binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.png binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.zip binary
