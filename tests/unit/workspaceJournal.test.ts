@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  cleanupAbandonedTemporaryWorkspace,
   createTemporaryWorkspace,
   reserveTemporaryFile,
   sha256File
@@ -44,7 +45,7 @@ describe('WorkspaceJournal', () => {
     await writeFile(temporaryPath, 'legacy sanitizer bytes', 'utf8')
     await link(temporaryPath, unrelatedLink)
     const journalPath = join(directory, 'temporary-workspaces.v1.json')
-    const journal = new WorkspaceJournal(journalPath)
+    const journal = createDebugJournal(journalPath)
     await journal.add(workspace)
 
     if (process.platform !== 'win32') {
@@ -73,7 +74,7 @@ describe('WorkspaceJournal', () => {
     await link(firstTemporaryPath, firstFinalPath)
     await link(firstTemporaryPath, userLink)
     const journalPath = join(directory, 'temporary-workspaces.v1.json')
-    const journal = new WorkspaceJournal(journalPath)
+    const journal = createDebugJournal(journalPath)
     await journal.add({
       rootPath: workspace.rootPath,
       outputDirectory: workspace.outputDirectory,
@@ -113,7 +114,7 @@ describe('WorkspaceJournal', () => {
     )
     const outputSha256 = await sha256File(outputPath)
     const journalPath = join(directory, 'temporary-workspaces.v1.json')
-    const journal = new WorkspaceJournal(journalPath)
+    const journal = createDebugJournal(journalPath)
     await journal.add({
       rootPath: workspace.rootPath,
       outputDirectory: workspace.outputDirectory,
@@ -152,7 +153,7 @@ describe('WorkspaceJournal', () => {
     )
     const outputSha256 = await sha256File(outputPath)
     const journalPath = join(directory, 'temporary-workspaces.v1.json')
-    const journal = new WorkspaceJournal(journalPath)
+    const journal = createDebugJournal(journalPath)
     await journal.add({
       rootPath: workspace.rootPath,
       outputDirectory: workspace.outputDirectory,
@@ -279,4 +280,30 @@ async function createTemporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'bid-sentry-workspace-journal-'))
   temporaryDirectories.push(directory)
   return directory
+}
+
+function createDebugJournal(journalPath: string): WorkspaceJournal {
+  return new WorkspaceJournal(journalPath, async (entry) => {
+    try {
+      await cleanupAbandonedTemporaryWorkspace(entry)
+    } catch (error) {
+      const details: string[] = []
+      let current: unknown = error
+      for (let index = 0; index < 5 && current instanceof Error; index += 1) {
+        const candidate = current as Error & {
+          code?: unknown
+          appError?: { code?: unknown }
+          cause?: unknown
+        }
+        details.push(
+          [candidate.name, candidate.code, candidate.appError?.code, candidate.message]
+            .filter((value): value is string => typeof value === 'string' && value.length > 0)
+            .join(':')
+        )
+        current = candidate.cause
+      }
+      console.error(`workspace cleanup diagnostic ${JSON.stringify(details)}`)
+      throw error
+    }
+  })
 }
