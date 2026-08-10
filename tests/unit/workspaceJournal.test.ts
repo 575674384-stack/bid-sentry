@@ -295,8 +295,9 @@ function createDebugJournal(journalPath: string): WorkspaceJournal {
           appError?: { code?: unknown }
           cause?: unknown
         }
+        const sourceLine = candidate.stack?.match(/fileSafety\.ts:(\d+)/u)?.[1]
         details.push(
-          [candidate.name, candidate.code, candidate.appError?.code, candidate.message]
+          [candidate.name, candidate.code, candidate.appError?.code, candidate.message, sourceLine]
             .filter((value): value is string => typeof value === 'string' && value.length > 0)
             .join(':')
         )
