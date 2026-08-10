@@ -46,6 +46,19 @@
 - Final v1.0.0 release workflow has not yet run
 - Advisory decision: needs-verification
 
+## Coordinator verification update (2026-08-10)
+
+- Latest local gate: 30 test files, 191 passed, 1 skipped; coverage 83.57%
+  statements, 74.65% branches, 87.23% lines; format, lint, typecheck, build
+  and diff checks passed.
+- Latest desktop/package gate: development Electron E2E 6 passed/2 skipped,
+  Linux production package audit and startup passed, dedicated packaged
+  sanitization/review/generation E2E passed, and live AI compatibility passed.
+- Build commands were run serially to keep normal and E2E `out/` artifacts
+  isolated.
+- Remaining gates: exact-commit Windows CI and unavailable Word/WPS/GUI PDF
+  reader opening checks. Version remains `0.1.0`; no tag or Release exists.
+
 ## Checkpoint Update
 
 - Current todo: Obtain Windows CI and manual compatibility evidence, then finalize the single v1.0.0 release
@@ -57,3 +70,56 @@
 - docs/aegis/work/2026-08-10-v1-complete-product/proof-bundle.md
 - Blocked on: Windows CI evidence and manual Word/WPS/LibreOffice/PDF-reader compatibility records
 - Next step: Commit the verified 0.1.0 implementation, push main for Windows CI, then perform the final 1.0.0 version bump only after remaining evidence gates
+
+## Coordinator checkpoint update (2026-08-10)
+
+- Current todo: obtain Windows CI evidence for the final implementation commit,
+  then perform the single `v1.0.0` release.
+- Active slice: `G5-release-verification`.
+- Completed in the main worktree: fresh local quality gate (`174 passed / 1
+  skipped`), coverage, build, development Electron E2E, Linux package and
+  ASAR audit, production startup E2E, packaged sanitization/review/generation
+  E2E, live AI compatibility, LibreOffice headless probe, documentation and
+  independent security/publication review.
+- Evidence refs: the `*-final.json` entries in this work directory,
+  `90-evidence.md`, and the current `git status`/test output.
+- Blocked on: Windows CI for the final commit; Word/WPS/PDF GUI applications
+  are unavailable on this host and are recorded as an explicit evidence gap.
+- Next step: update the executed publication ADR, run the workspace bundle/check,
+  commit the complete `0.1.0` implementation, push `main`, read back the exact
+  CI run, and only then bump to `1.0.0`.
+
+### Drift check
+
+- Intent lock: aligned with the complete product and single-public-release
+  boundary.
+- Scope fence: aligned; OCR, hosted service, accounts, telemetry, silent
+  updates and automatic bid-file modification remain out of scope.
+- Owner/contract boundary: aligned; Main owns network/lifecycle/publication,
+  document adapters own writes, and versioned contracts own IPC shapes.
+- Compatibility status: needs-verification until Windows CI and the documented
+  host-application gaps are resolved or explicitly accepted.
+
+## Checkpoint Update
+
+- Current todo: Obtain Windows CI evidence, finish the documented manual compatibility boundary, then perform the single v1.0.0 release
+- Active slice: G5-release-verification
+- Completed todos:
+- Fresh local quality gate, Electron E2E, Linux package/audit/startup, packaged functional E2E, live AI compatibility, documentation and independent review
+- Evidence refs:
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-local-quality-gate-final.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-linux-package-final.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-packaged-functional-e2e-final.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-independent-review-final.json
+- Blocked on: Windows CI has not yet run for the final implementation commit; Word/WPS/PDF GUI applications are unavailable on this host
+- Next step: Update evidence and ADR records, commit the verified 0.1.0 implementation, push main, wait for the exact-commit CI result, then bump only to 1.0.0 and tag/release
+
+## DriftCheckDraft
+
+- Scope status: aligned
+- Compatibility status: needs-verification
+- Retirement status: aligned
+- New risk signals:
+- Windows CI for the final implementation commit is still pending.
+- Word/WPS/PDF GUI manual opening cannot run on this host; LibreOffice headless conversion passed.
+- Advisory decision: needs-verification

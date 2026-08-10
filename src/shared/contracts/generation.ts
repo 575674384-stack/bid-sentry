@@ -6,6 +6,9 @@ export const TemplateCandidateSchema = z
     title: z.string().trim().min(1).max(300),
     startNodeId: z.string().trim().min(1).max(200),
     endNodeId: z.string().trim().min(1).max(200),
+    startPage: z.number().int().positive().optional(),
+    endPage: z.number().int().positive().optional(),
+    previewText: z.string().trim().max(1_000).optional(),
     sourceType: z.enum(['docx-template', 'pdf-rebuilt']),
     sectionOutline: z.array(z.string().trim().max(200)).max(100),
     confidence: z.number().min(0).max(1),
@@ -56,11 +59,60 @@ export const FillPlanSchema = z
   .object({
     schemaVersion: z.literal(1),
     planId: z.string().uuid(),
+    planDigest: z.string().regex(/^[a-f0-9]{64}$/u),
     inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
     candidateId: z.string().regex(/^[a-f0-9]{16,64}$/u),
     userForm: GenerationUserFormSchema,
     actions: z.array(FieldActionSchema).max(2_000),
     unknownRequired: z.number().int().nonnegative(),
+    unknownFields: z
+      .array(
+        z
+          .object({ nodeId: z.string().trim().min(1).max(200), text: z.string().trim().max(500) })
+          .strict()
+      )
+      .max(100),
+    unresolvedFields: z
+      .array(
+        z
+          .object({
+            field: z.string().trim().min(1).max(100),
+            label: z.string().trim().min(1).max(300)
+          })
+          .strict()
+      )
+      .max(100)
+      .default([]),
+    warnings: z.array(z.string().trim().max(500)).max(100)
+  })
+  .strict()
+
+export const GenerationPreviewPlanSchema = z
+  .object({
+    candidateId: z.string().regex(/^[a-f0-9]{16,64}$/u),
+    planId: z.string().uuid(),
+    planDigest: z.string().regex(/^[a-f0-9]{64}$/u),
+    inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    actions: z.array(FieldActionSchema).max(2_000),
+    unknownRequired: z.number().int().nonnegative(),
+    unknownFields: z
+      .array(
+        z
+          .object({ nodeId: z.string().trim().min(1).max(200), text: z.string().trim().max(500) })
+          .strict()
+      )
+      .max(100),
+    unresolvedFields: z
+      .array(
+        z
+          .object({
+            field: z.string().trim().min(1).max(100),
+            label: z.string().trim().min(1).max(300)
+          })
+          .strict()
+      )
+      .max(100)
+      .default([]),
     warnings: z.array(z.string().trim().max(500)).max(100)
   })
   .strict()
@@ -70,8 +122,10 @@ export const GenerationRequestSchema = z
     schemaVersion: z.literal(1),
     inputId: z.string().uuid(),
     outputDirectoryId: z.string().uuid(),
+    previewTaskId: z.string().uuid(),
     candidateId: z.string().regex(/^[a-f0-9]{16,64}$/u),
-    userForm: GenerationUserFormSchema,
+    planId: z.string().uuid(),
+    planDigest: z.string().regex(/^[a-f0-9]{64}$/u),
     confirmed: z.literal(true)
   })
   .strict()
@@ -89,9 +143,9 @@ export const GenerationPreviewSchema = z
     schemaVersion: z.literal(1),
     taskId: z.string().uuid(),
     inputName: z.string().trim().min(1).max(255),
+    inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
     candidates: z.array(TemplateCandidateSchema).min(1).max(50),
-    actions: z.array(FieldActionSchema).max(2_000),
-    warnings: z.array(z.string().trim().max(500)).max(100)
+    plans: z.array(GenerationPreviewPlanSchema).min(1).max(50)
   })
   .strict()
 
@@ -101,7 +155,19 @@ export const GenerationResultSchema = z
     taskId: z.string().uuid(),
     outputName: z.string().trim().min(1).max(255),
     reportName: z.string().trim().min(1).max(255),
-    warnings: z.array(z.string().trim().max(500)).max(100)
+    warnings: z.array(z.string().trim().max(500)).max(100),
+    files: z
+      .array(
+        z
+          .object({
+            fileId: z.string().uuid(),
+            displayName: z.string().trim().min(1).max(255),
+            kind: z.enum(['generated-document', 'json-report'])
+          })
+          .strict()
+      )
+      .max(2)
+      .default([])
   })
   .strict()
 
@@ -109,6 +175,7 @@ export type TemplateCandidate = z.infer<typeof TemplateCandidateSchema>
 export type GenerationUserForm = z.infer<typeof GenerationUserFormSchema>
 export type FieldAction = z.infer<typeof FieldActionSchema>
 export type FillPlan = z.infer<typeof FillPlanSchema>
+export type GenerationPreviewPlan = z.infer<typeof GenerationPreviewPlanSchema>
 export type GenerationRequest = z.infer<typeof GenerationRequestSchema>
 export type GenerationPreviewRequest = z.infer<typeof GenerationPreviewRequestSchema>
 export type GenerationPreview = z.infer<typeof GenerationPreviewSchema>

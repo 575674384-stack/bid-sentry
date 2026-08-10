@@ -20,7 +20,10 @@ import {
   type SelectedOutputDirectory,
   type TaskProgress,
   UpdateStatusSchema,
+  UpdateActionResultSchema,
   type UpdateStatus,
+  TaskStartResultSchema,
+  type TaskStartResult,
   ReviewResultSchema,
   type ReviewRequest,
   type ReviewResult,
@@ -50,10 +53,12 @@ interface RendererBridge {
   installUpdate(): Promise<unknown>
   openReleasePage(): Promise<unknown>
   openDiagnosticsDirectory(): Promise<unknown>
+  startReview(): Promise<unknown>
   runReview(request: ReviewRequest): Promise<unknown>
   cancelReview(taskId: string): Promise<unknown>
   previewGeneration(request: GenerationPreviewRequest): Promise<unknown>
   runGeneration(request: GenerationRequest): Promise<unknown>
+  cancelGeneration(taskId: string): Promise<unknown>
 }
 
 type RuntimeSchema<T> = { parse(value: unknown): T }
@@ -113,12 +118,15 @@ export const bidSentryApi = Object.freeze({
     return invoke(() => bridge().installUpdate(), UpdateStatusSchema)
   },
   openReleasePage(): Promise<void> {
-    return invoke(() => bridge().openReleasePage(), ResultShownSchema).then(() => undefined)
+    return invoke(() => bridge().openReleasePage(), UpdateActionResultSchema).then(() => undefined)
   },
   openDiagnosticsDirectory(): Promise<void> {
     return invoke(() => bridge().openDiagnosticsDirectory(), ResultShownSchema).then(
       () => undefined
     )
+  },
+  startReview(): Promise<TaskStartResult> {
+    return invoke(() => bridge().startReview(), TaskStartResultSchema)
   },
   runReview(request: ReviewRequest): Promise<ReviewResult> {
     return invoke(() => bridge().runReview(request), ReviewResultSchema)
@@ -133,6 +141,11 @@ export const bidSentryApi = Object.freeze({
   },
   runGeneration(request: GenerationRequest): Promise<GenerationResult> {
     return invoke(() => bridge().runGeneration(request), GenerationResultSchema)
+  },
+  cancelGeneration(taskId: string): Promise<void> {
+    return invoke(() => bridge().cancelGeneration(taskId), TaskCancellationResultSchema).then(
+      () => undefined
+    )
   }
 })
 

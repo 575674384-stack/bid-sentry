@@ -49,4 +49,20 @@ describe('anchored document readers', () => {
       appError: { code: 'TEXT_LAYER_REQUIRED' }
     })
   })
+
+  it('anchors PDF headings and preserves coordinates for obvious columns', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'bid-sentry-readers-pdf-layout-'))
+    directories.push(directory)
+    const filePath = join(directory, 'layout.pdf')
+    await writePdfFixture(filePath, { qualificationTemplate: true, multiColumn: true })
+
+    const snapshot = await readDocumentSnapshot(filePath, 'pdf')
+    const heading = snapshot.nodes.find((node) => node.text === 'Qualification template format')
+    const bidder = snapshot.nodes.find((node) => node.text.startsWith('Bidder name:'))
+    const project = snapshot.nodes.find((node) => node.text.startsWith('Project number:'))
+    expect(heading).toMatchObject({ kind: 'heading', level: 1 })
+    expect(bidder?.anchor.bbox?.x).toBeLessThan(project?.anchor.bbox?.x ?? 0)
+    expect(bidder?.anchor.page).toBe(project?.anchor.page)
+    expect(Math.abs((bidder?.anchor.bbox?.y ?? 0) - (project?.anchor.bbox?.y ?? 0))).toBeLessThan(4)
+  })
 })

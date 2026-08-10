@@ -22,6 +22,7 @@ import {
 } from '../../shared/contracts'
 import type { DiagnosticRecorder } from '../diagnostics/diagnosticRecorder'
 import {
+  DocumentSafetyError,
   cleanupAbandonedTemporaryWorkspace,
   createTemporaryWorkspace,
   normalizeFileIdentity,
@@ -47,7 +48,10 @@ export interface TaskManagerOptions {
   operationTimeoutMs?: number
   cancelKillTimeoutMs?: number
   cleanupWorkspace?: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
-  createWorkspace?: (outputDirectory: string) => Promise<TemporaryWorkspaceDescriptor>
+  createWorkspace?: (
+    outputDirectory: string,
+    expectedOutputDirectoryIdentity: FileSystemIdentity
+  ) => Promise<TemporaryWorkspaceDescriptor>
   recordWorkspace?: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
   forgetWorkspace?: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
   diagnostics?: DiagnosticRecorder
@@ -104,7 +108,10 @@ export class TaskManager {
   readonly #operationTimeoutMs: number
   readonly #cancelKillTimeoutMs: number
   readonly #cleanupWorkspace: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
-  readonly #createWorkspace: (outputDirectory: string) => Promise<TemporaryWorkspaceDescriptor>
+  readonly #createWorkspace: (
+    outputDirectory: string,
+    expectedOutputDirectoryIdentity: FileSystemIdentity
+  ) => Promise<TemporaryWorkspaceDescriptor>
   readonly #recordWorkspace: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
   readonly #forgetWorkspace: (workspace: TemporaryWorkspaceDescriptor) => Promise<void>
   readonly #diagnostics: DiagnosticRecorder | undefined
@@ -119,8 +126,11 @@ export class TaskManager {
     this.#cleanupWorkspace = options.cleanupWorkspace ?? cleanupAbandonedTemporaryWorkspace
     this.#createWorkspace =
       options.createWorkspace ??
-      (async (outputDirectory) => {
-        const workspace = await createTemporaryWorkspace(outputDirectory)
+      (async (outputDirectory, expectedOutputDirectoryIdentity) => {
+        const workspace = await createTemporaryWorkspace(
+          outputDirectory,
+          expectedOutputDirectoryIdentity
+        )
         return {
           rootPath: workspace.rootPath,
           outputDirectory: workspace.outputDirectory,
@@ -338,18 +348,20 @@ export class TaskManager {
 
   async #prepareExecution(record: TaskRecord, request: TaskExecutionRequest): Promise<void> {
     try {
+      const expectedOutput = record.expectedOutputDirectory
+      const expectedOutputIdentity = record.expectedOutputDirectoryIdentity
+      if (!expectedOutput || !expectedOutputIdentity) {
+        await this.#fail(record, createAppError('INTERNAL_ERROR'))
+        return
+      }
       const workspace = TemporaryWorkspaceDescriptorSchema.parse(
-        await this.#createWorkspace(request.outputDirectory)
+        await this.#createWorkspace(request.outputDirectory, expectedOutputIdentity)
       )
       if (record.settled) {
         await this.#cleanupWorkspace(workspace)
         return
       }
-      const expectedOutput = record.expectedOutputDirectory
-      const expectedOutputIdentity = record.expectedOutputDirectoryIdentity
       if (
-        !expectedOutput ||
-        !expectedOutputIdentity ||
         normalizeFileIdentity(workspace.outputDirectory) !==
           normalizeFileIdentity(expectedOutput) ||
         !sameFileSystemIdentity(workspace.outputDirectoryIdentity, expectedOutputIdentity) ||
@@ -379,8 +391,11 @@ export class TaskManager {
           outputDirectoryIdentity: record.workspace.outputDirectoryIdentity
         })
       )
-    } catch {
-      await this.#fail(record, createAppError('INTERNAL_ERROR'))
+    } catch (error) {
+      await this.#fail(
+        record,
+        error instanceof DocumentSafetyError ? error.appError : createAppError('INTERNAL_ERROR')
+      )
     }
   }
 

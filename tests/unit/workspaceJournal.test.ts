@@ -1,5 +1,7 @@
 import {
   access,
+  link,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -7,12 +9,18 @@ import {
   rename,
   rm,
   stat,
+  unlink,
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createTemporaryWorkspace } from '../../src/core/documents/fileSafety'
+import {
+  createTemporaryWorkspace,
+  reserveTemporaryFile,
+  sha256File
+} from '../../src/core/documents/fileSafety'
+import { fileSystemIdentityFromBigInts } from '../../src/core/documents/pathSafety'
 import { WorkspaceJournal } from '../../src/main/tasks/workspaceJournal'
 
 const temporaryDirectories: string[] = []
@@ -31,6 +39,10 @@ describe('WorkspaceJournal', () => {
     const outputDirectory = join(directory, 'output')
     await import('node:fs/promises').then(({ mkdir }) => mkdir(outputDirectory))
     const workspace = await createTemporaryWorkspace(outputDirectory)
+    const temporaryPath = await reserveTemporaryFile(workspace, 'sanitized.docx')
+    const unrelatedLink = join(outputDirectory, 'user-owned-link.docx')
+    await writeFile(temporaryPath, 'legacy sanitizer bytes', 'utf8')
+    await link(temporaryPath, unrelatedLink)
     const journalPath = join(directory, 'temporary-workspaces.v1.json')
     const journal = new WorkspaceJournal(journalPath)
     await journal.add(workspace)
@@ -42,6 +54,120 @@ describe('WorkspaceJournal', () => {
     await journal.recover()
 
     await expect(access(workspace.rootPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(unrelatedLink, 'utf8')).toBe('legacy sanitizer bytes')
+    await expect(access(journalPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('rolls back final hard links left by a crash between multi-file publications', async () => {
+    const directory = await createTemporaryDirectory()
+    const outputDirectory = join(directory, 'output')
+    await mkdir(outputDirectory)
+    const workspace = await createTemporaryWorkspace(outputDirectory)
+    const firstTemporaryPath = await reserveTemporaryFile(workspace, 'report.json')
+    const secondTemporaryPath = await reserveTemporaryFile(workspace, 'report.html')
+    await writeFile(firstTemporaryPath, '{"ok":true}\n', { mode: 0o600 })
+    await writeFile(secondTemporaryPath, '<p>ok</p>\n', { mode: 0o600 })
+    const firstFinalPath = join(outputDirectory, 'report.json')
+    const secondFinalPath = join(outputDirectory, 'report.html')
+    const userLink = join(outputDirectory, 'user-owned-link')
+    await link(firstTemporaryPath, firstFinalPath)
+    await link(firstTemporaryPath, userLink)
+    const journalPath = join(directory, 'temporary-workspaces.v1.json')
+    const journal = new WorkspaceJournal(journalPath)
+    await journal.add({
+      rootPath: workspace.rootPath,
+      outputDirectory: workspace.outputDirectory,
+      rootIdentity: workspace.rootIdentity,
+      outputDirectoryIdentity: workspace.outputDirectoryIdentity,
+      publication: {
+        artifacts: [
+          { temporaryPath: firstTemporaryPath, outputPath: firstFinalPath },
+          { temporaryPath: secondTemporaryPath, outputPath: secondFinalPath }
+        ]
+      }
+    })
+
+    await journal.recover()
+
+    await expect(access(firstFinalPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(secondFinalPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(userLink)).resolves.toBeUndefined()
+    await expect(access(workspace.rootPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(journalPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('preserves a replacement at a journaled output path when its identity changed', async () => {
+    const directory = await createTemporaryDirectory()
+    const outputDirectory = join(directory, 'output')
+    await mkdir(outputDirectory)
+    const workspace = await createTemporaryWorkspace(outputDirectory)
+    const temporaryPath = await reserveTemporaryFile(workspace, 'report.json')
+    await writeFile(temporaryPath, '{"task":true}\n', { mode: 0o600 })
+    const outputPath = join(outputDirectory, 'report.json')
+    await link(temporaryPath, outputPath)
+    const publishedInfo = await lstat(outputPath, { bigint: true })
+    const publishedIdentity = fileSystemIdentityFromBigInts(
+      publishedInfo.dev,
+      publishedInfo.ino,
+      publishedInfo.mode
+    )
+    const outputSha256 = await sha256File(outputPath)
+    const journalPath = join(directory, 'temporary-workspaces.v1.json')
+    const journal = new WorkspaceJournal(journalPath)
+    await journal.add({
+      rootPath: workspace.rootPath,
+      outputDirectory: workspace.outputDirectory,
+      rootIdentity: workspace.rootIdentity,
+      outputDirectoryIdentity: workspace.outputDirectoryIdentity,
+      publication: {
+        artifacts: [{ temporaryPath, outputPath, outputSha256, identity: publishedIdentity }]
+      }
+    })
+    await unlink(outputPath)
+    await writeFile(outputPath, 'user replacement', 'utf8')
+
+    await journal.recover()
+
+    expect(await readFile(outputPath, 'utf8')).toBe('user replacement')
+    await expect(access(workspace.rootPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(journalPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('rolls back complete journaled identities after workspace cleanup was interrupted', async () => {
+    const directory = await createTemporaryDirectory()
+    const outputDirectory = join(directory, 'output')
+    await mkdir(outputDirectory)
+    const workspace = await createTemporaryWorkspace(outputDirectory)
+    const temporaryPath = await reserveTemporaryFile(workspace, 'report.json')
+    await writeFile(temporaryPath, '{"task":true}\n', { mode: 0o600 })
+    const outputPath = join(outputDirectory, 'report.json')
+    const unrelatedLink = join(outputDirectory, 'user-owned-link')
+    await link(temporaryPath, outputPath)
+    await link(temporaryPath, unrelatedLink)
+    const publishedInfo = await lstat(outputPath, { bigint: true })
+    const identity = fileSystemIdentityFromBigInts(
+      publishedInfo.dev,
+      publishedInfo.ino,
+      publishedInfo.mode
+    )
+    const outputSha256 = await sha256File(outputPath)
+    const journalPath = join(directory, 'temporary-workspaces.v1.json')
+    const journal = new WorkspaceJournal(journalPath)
+    await journal.add({
+      rootPath: workspace.rootPath,
+      outputDirectory: workspace.outputDirectory,
+      rootIdentity: workspace.rootIdentity,
+      outputDirectoryIdentity: workspace.outputDirectoryIdentity,
+      publication: {
+        artifacts: [{ temporaryPath, outputPath, outputSha256, identity }]
+      }
+    })
+    await rm(workspace.rootPath, { recursive: true, force: true })
+
+    await journal.recover()
+
+    await expect(access(outputPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(unrelatedLink, 'utf8')).toBe('{"task":true}\n')
     await expect(access(journalPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 

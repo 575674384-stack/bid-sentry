@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "live-ai-compatibility-final",
+  "type": "command",
+  "source": "pnpm test:ai:live",
+  "summary": "Synthetic live OpenAI-compatible models and JSON chat contract passed; output contained no configuration values.",
+  "verifier": "coordinator main-worktree verification 2026-08-10"
+}

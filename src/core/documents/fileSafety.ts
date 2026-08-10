@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { createReadStream } from 'node:fs'
 import { lstat, link, mkdtemp, open, rm, unlink } from 'node:fs/promises'
 import { basename, dirname, extname, join, parse, resolve, sep } from 'node:path'
 import { DOMParser, onWarningStopParsing } from '@xmldom/xmldom'
@@ -9,12 +8,16 @@ import {
   TemporaryWorkspaceDescriptorSchema,
   VerificationReportSchema,
   createAppError,
+  toSafeAppError,
+  withDiagnostic,
+  type DiagnosticStage,
   type AppError,
   type AppErrorCode,
   type DocumentType,
   type FileSystemIdentity,
   type InputSnapshot,
   type TemporaryWorkspaceDescriptor,
+  type WorkspacePublicationArtifact,
   type VerificationReport
 } from '../../shared/contracts'
 import {
@@ -37,12 +40,21 @@ const TRUSTED_WORKSPACES = new WeakSet<TemporaryWorkspace>()
 export class DocumentSafetyError extends Error {
   readonly appError: AppError
 
-  constructor(code: AppErrorCode, cause?: unknown) {
-    const appError = createAppError(code)
+  constructor(codeOrError: AppErrorCode | AppError, cause?: unknown) {
+    const appError = typeof codeOrError === 'string' ? createAppError(codeOrError) : codeOrError
     super(appError.message, cause === undefined ? undefined : { cause })
     this.name = 'DocumentSafetyError'
     this.appError = appError
   }
+}
+
+/** Convert an arbitrary task-boundary failure into a safe, diagnosable error. */
+export function withDiagnosticDocumentError(
+  error: unknown,
+  stage: DiagnosticStage
+): DocumentSafetyError {
+  const safe = error instanceof DocumentSafetyError ? error.appError : toSafeAppError(error)
+  return new DocumentSafetyError(withDiagnostic(safe, stage), error)
 }
 
 export class TemporaryWorkspace {
@@ -154,23 +166,60 @@ export async function assertInputUnchanged(
 export async function sha256File(filePath: string, signal?: AbortSignal): Promise<string> {
   throwIfAborted(signal)
   const hash = createHash('sha256')
-  const stream = createReadStream(filePath)
+  // Hash through an opened descriptor, not by repeatedly reopening a path.
+  // A watcher can replace a pathname while it is being read; the descriptor
+  // keeps the bytes tied to the inode that was attested at open time.
+  const beforeOpen = await lstat(filePath, { bigint: true }).catch((error: unknown) => {
+    throw new DocumentSafetyError('FILE_CHANGED', error)
+  })
+  if (!beforeOpen.isFile() || beforeOpen.isSymbolicLink()) {
+    throw new DocumentSafetyError('FILE_CHANGED')
+  }
+  const handle = await open(filePath, 'r').catch((error: unknown) => {
+    throw new DocumentSafetyError('FILE_CHANGED', error)
+  })
+  let stream: ReturnType<typeof handle.createReadStream> | null = null
 
   try {
+    const opened = await handle.stat({ bigint: true })
+    const openedIdentity = fileSystemIdentityFromBigInts(opened.dev, opened.ino, opened.mode)
+    if (
+      !sameFileSystemIdentity(
+        openedIdentity,
+        fileSystemIdentityFromBigInts(beforeOpen.dev, beforeOpen.ino, beforeOpen.mode)
+      )
+    ) {
+      throw new DocumentSafetyError('FILE_CHANGED')
+    }
+    stream = handle.createReadStream({ autoClose: false })
     for await (const chunk of stream) {
       throwIfAborted(signal)
       hash.update(chunk as Buffer)
     }
+    const afterRead = await lstat(filePath, { bigint: true })
+    if (
+      !afterRead.isFile() ||
+      afterRead.isSymbolicLink() ||
+      !sameFileSystemIdentity(
+        fileSystemIdentityFromBigInts(afterRead.dev, afterRead.ino, afterRead.mode),
+        openedIdentity
+      )
+    ) {
+      throw new DocumentSafetyError('FILE_CHANGED')
+    }
     return hash.digest('hex')
   } catch (error) {
-    stream.destroy()
+    stream?.destroy()
     if (signal?.aborted) throw new DocumentSafetyError('TASK_CANCELLED', error)
     throw error
+  } finally {
+    await handle.close().catch(() => undefined)
   }
 }
 
 export async function createTemporaryWorkspace(
-  outputDirectory: string
+  outputDirectory: string,
+  expectedOutputDirectoryIdentity?: FileSystemIdentity
 ): Promise<TemporaryWorkspace> {
   const selectedOutput = await resolvePathIdentityWithoutSymbolicLinks(outputDirectory).catch(
     (error: unknown) => {
@@ -183,12 +232,23 @@ export async function createTemporaryWorkspace(
   if (!outputInfo.isDirectory() || outputInfo.isSymbolicLink()) {
     throw new DocumentSafetyError('INVALID_DOCUMENT')
   }
+  if (
+    expectedOutputDirectoryIdentity &&
+    !sameFileSystemIdentity(selectedOutput.identity, expectedOutputDirectoryIdentity)
+  ) {
+    throw new DocumentSafetyError('FILE_CHANGED')
+  }
 
   const rootPath = await mkdtemp(join(selectedOutput.canonicalPath, TEMPORARY_DIRECTORY_PREFIX))
-  const [createdRoot, currentOutput] = await Promise.all([
-    resolvePathIdentityWithoutSymbolicLinks(rootPath),
-    resolvePathIdentityWithoutSymbolicLinks(selectedOutput.canonicalPath)
-  ]).catch((error: unknown) => {
+  const createdRoot = await resolvePathIdentityWithoutSymbolicLinks(rootPath).catch(
+    (error: unknown) => {
+      throw new DocumentSafetyError('INTERNAL_ERROR', error)
+    }
+  )
+  const currentOutput = await resolvePathIdentityWithoutSymbolicLinks(
+    selectedOutput.canonicalPath
+  ).catch(async (error: unknown) => {
+    await removeUnadoptedWorkspace(rootPath, selectedOutput.canonicalPath, createdRoot.identity)
     throw new DocumentSafetyError('INTERNAL_ERROR', error)
   })
   if (
@@ -196,6 +256,7 @@ export async function createTemporaryWorkspace(
       normalizeFileIdentity(currentOutput.canonicalPath) ||
     !sameFileSystemIdentity(selectedOutput.identity, currentOutput.identity)
   ) {
+    await removeUnadoptedWorkspace(rootPath, selectedOutput.canonicalPath, createdRoot.identity)
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
   const workspace = new TemporaryWorkspace(
@@ -206,6 +267,31 @@ export async function createTemporaryWorkspace(
   )
   TRUSTED_WORKSPACES.add(workspace)
   return workspace
+}
+
+async function removeUnadoptedWorkspace(
+  rootPath: string,
+  expectedParent: string,
+  expectedIdentity: FileSystemIdentity
+): Promise<void> {
+  try {
+    const current = await resolvePathIdentityWithoutSymbolicLinks(rootPath)
+    if (
+      normalizeFileIdentity(current.canonicalPath) !== normalizeFileIdentity(rootPath) ||
+      normalizeFileIdentity(dirname(current.canonicalPath)) !==
+        normalizeFileIdentity(expectedParent) ||
+      !sameFileSystemIdentity(current.identity, expectedIdentity)
+    ) {
+      return
+    }
+    const info = await lstat(current.canonicalPath)
+    if (!info.isDirectory() || info.isSymbolicLink()) return
+    await rm(current.canonicalPath, { recursive: true, force: true })
+  } catch {
+    // The directory may already have been detached by the replacement.  It
+    // is deliberately left for the next explicit workspace recovery rather
+    // than deleting an ambiguous path.
+  }
 }
 
 export async function adoptTemporaryWorkspace(
@@ -327,7 +413,11 @@ export async function finalizeVerifiedOutput(options: {
   await assertWorkspaceIdentities(workspace)
   throwIfAborted(signal)
   const verification = VerificationReportSchema.parse(options.verification)
-  if (verification.status !== 'passed' || verification.inputSha256 !== input.sha256) {
+  if (
+    verification.status !== 'passed' ||
+    verification.inputSha256 !== input.sha256 ||
+    (verification.inputSha256s && !verification.inputSha256s.includes(input.sha256))
+  ) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
   if (!workspace.contains(temporaryPath)) {
@@ -392,6 +482,81 @@ export async function publishReservedWorkspaceFile(options: {
       temporaryInfo.ino,
       temporaryInfo.mode
     )
+  }
+}
+
+/**
+ * Re-attest a published hard link immediately before workspace cleanup.  The
+ * final path must still be the exact task-owned inode and its bytes must match
+ * the fresh verification report.  When `temporaryPath` is supplied, the
+ * workspace link is checked too; after cleanup callers can attest the final
+ * path again without a second writer.
+ */
+export async function attestPublishedFile(options: {
+  published: PublishedFile
+  expectedSha256: string
+  temporaryPath?: string
+  signal?: AbortSignal
+}): Promise<void> {
+  const { published, expectedSha256, temporaryPath, signal } = options
+  await attestExactFile({
+    absolutePath: published.absolutePath,
+    expectedIdentity: published.identity,
+    expectedSha256,
+    ...(signal ? { signal } : {})
+  })
+  if (!temporaryPath) return
+  await attestExactFile({
+    absolutePath: temporaryPath,
+    expectedIdentity: published.identity,
+    expectedSha256,
+    ...(signal ? { signal } : {})
+  })
+}
+
+/** Proves one path's exact identity both before and after hashing its bytes. */
+export async function attestExactFile(options: {
+  absolutePath: string
+  expectedIdentity: FileSystemIdentity
+  expectedSha256: string
+  signal?: AbortSignal
+  afterHash?: () => void | Promise<void>
+}): Promise<void> {
+  const { absolutePath, expectedIdentity, expectedSha256, signal, afterHash } = options
+  throwIfAborted(signal)
+  const beforeHash = await lstat(absolutePath, { bigint: true }).catch((error: unknown) => {
+    throw new DocumentSafetyError('INTERNAL_ERROR', error)
+  })
+  if (
+    !beforeHash.isFile() ||
+    beforeHash.isSymbolicLink() ||
+    !sameFileSystemIdentity(
+      fileSystemIdentityFromBigInts(beforeHash.dev, beforeHash.ino, beforeHash.mode),
+      expectedIdentity
+    )
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  const actualSha256 = await sha256File(absolutePath, signal)
+  await afterHash?.()
+  if (actualSha256 !== expectedSha256) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  const afterHashInfo = await lstat(absolutePath, { bigint: true }).catch((error: unknown) => {
+    throw new DocumentSafetyError('INTERNAL_ERROR', error)
+  })
+  if (
+    !afterHashInfo.isFile() ||
+    afterHashInfo.isSymbolicLink() ||
+    !sameFileSystemIdentity(
+      fileSystemIdentityFromBigInts(afterHashInfo.dev, afterHashInfo.ino, afterHashInfo.mode),
+      expectedIdentity
+    ) ||
+    afterHashInfo.size !== beforeHash.size ||
+    afterHashInfo.mtimeNs !== beforeHash.mtimeNs ||
+    afterHashInfo.ctimeNs !== beforeHash.ctimeNs
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
   }
 }
 
@@ -510,7 +675,10 @@ export async function cleanupAbandonedTemporaryWorkspace(
       throw new DocumentSafetyError('INTERNAL_ERROR', error)
     }
   )
-  if (!currentRoot) return
+  if (!currentRoot) {
+    await rollbackDetachedJournaledHardLinks(descriptor)
+    return
+  }
   const currentOutput = await resolvePathIdentityWithoutSymbolicLinks(outputDirectory).catch(
     (error: unknown) => {
       throw new DocumentSafetyError('INTERNAL_ERROR', error)
@@ -548,7 +716,149 @@ export async function cleanupAbandonedTemporaryWorkspace(
   ) {
     throw new DocumentSafetyError('INTERNAL_ERROR')
   }
-  await rm(confirmedRoot.canonicalPath, { recursive: true, force: true })
+  // A process can terminate between hard-linking two final artifacts.  New
+  // publication entries journal the exact temporary/final path pair and (once
+  // linked) the expected inode/hash, so recovery can remove only task-owned
+  // outputs.  Legacy sanitization entries have no publication list and are
+  // intentionally not guessed at here.
+  await rollbackJournaledHardLinks(
+    confirmedRoot.canonicalPath,
+    confirmedOutput.canonicalPath,
+    descriptor.publication?.artifacts ?? []
+  )
+  const [finalRoot, finalOutput] = await Promise.all([
+    resolvePathIdentityWithoutSymbolicLinks(rootPath),
+    resolvePathIdentityWithoutSymbolicLinks(outputDirectory)
+  ]).catch((error: unknown) => {
+    throw new DocumentSafetyError('INTERNAL_ERROR', error)
+  })
+  if (
+    normalizeFileIdentity(finalRoot.canonicalPath) !== normalizeFileIdentity(rootPath) ||
+    normalizeFileIdentity(finalOutput.canonicalPath) !== normalizeFileIdentity(outputDirectory) ||
+    !sameFileSystemIdentity(finalRoot.identity, descriptor.rootIdentity) ||
+    !sameFileSystemIdentity(finalOutput.identity, descriptor.outputDirectoryIdentity)
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  const [finalRootInfo, finalOutputInfo] = await Promise.all([
+    lstat(finalRoot.canonicalPath),
+    lstat(finalOutput.canonicalPath)
+  ])
+  if (
+    !finalRootInfo.isDirectory() ||
+    finalRootInfo.isSymbolicLink() ||
+    !finalOutputInfo.isDirectory() ||
+    finalOutputInfo.isSymbolicLink()
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  await rm(finalRoot.canonicalPath, { recursive: true, force: true })
+}
+
+async function rollbackDetachedJournaledHardLinks(
+  descriptor: TemporaryWorkspaceDescriptor
+): Promise<void> {
+  const artifacts = descriptor.publication?.artifacts ?? []
+  if (artifacts.length === 0) return
+  const outputDirectory = resolve(descriptor.outputDirectory)
+  const workspaceRoot = resolve(descriptor.rootPath)
+  const currentOutput = await resolvePathIdentityWithoutSymbolicLinks(outputDirectory).catch(
+    (error: unknown) => {
+      throw new DocumentSafetyError('INTERNAL_ERROR', error)
+    }
+  )
+  if (
+    normalizeFileIdentity(currentOutput.canonicalPath) !== normalizeFileIdentity(outputDirectory) ||
+    !sameFileSystemIdentity(currentOutput.identity, descriptor.outputDirectoryIdentity)
+  ) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  const outputInfo = await lstat(currentOutput.canonicalPath)
+  if (!outputInfo.isDirectory() || outputInfo.isSymbolicLink()) {
+    throw new DocumentSafetyError('INTERNAL_ERROR')
+  }
+  for (const artifact of artifacts) {
+    const outputPath = resolve(artifact.outputPath)
+    const temporaryPath = resolve(artifact.temporaryPath)
+    if (
+      normalizeFileIdentity(dirname(outputPath)) !== normalizeFileIdentity(outputDirectory) ||
+      normalizeFileIdentity(dirname(temporaryPath)) !== normalizeFileIdentity(workspaceRoot)
+    ) {
+      throw new DocumentSafetyError('INTERNAL_ERROR')
+    }
+    if (!artifact.identity || !artifact.outputSha256) continue
+    try {
+      await attestExactFile({
+        absolutePath: outputPath,
+        expectedIdentity: artifact.identity,
+        expectedSha256: artifact.outputSha256
+      })
+      await unlink(outputPath)
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'ENOENT') continue
+      if (error instanceof DocumentSafetyError) continue
+      throw new DocumentSafetyError('INTERNAL_ERROR', error)
+    }
+  }
+}
+
+async function rollbackJournaledHardLinks(
+  workspaceRoot: string,
+  outputDirectory: string,
+  artifacts: readonly WorkspacePublicationArtifact[]
+): Promise<void> {
+  const exactWorkspaceRoot = resolve(workspaceRoot)
+  const exactOutputDirectory = resolve(outputDirectory)
+  for (const artifact of artifacts) {
+    const outputPath = resolve(artifact.outputPath)
+    const temporaryPath = resolve(artifact.temporaryPath)
+    if (
+      normalizeFileIdentity(dirname(outputPath)) !== normalizeFileIdentity(exactOutputDirectory) ||
+      normalizeFileIdentity(dirname(temporaryPath)) !== normalizeFileIdentity(exactWorkspaceRoot)
+    ) {
+      throw new DocumentSafetyError('INTERNAL_ERROR')
+    }
+    const temporaryInfo = await lstat(temporaryPath, { bigint: true }).catch((error: unknown) => {
+      if (isNodeError(error) && error.code === 'ENOENT') return null
+      throw new DocumentSafetyError('INTERNAL_ERROR', error)
+    })
+    const outputInfo = await lstat(outputPath, { bigint: true }).catch((error: unknown) => {
+      if (isNodeError(error) && error.code === 'ENOENT') return null
+      throw new DocumentSafetyError('INTERNAL_ERROR', error)
+    })
+    if (!outputInfo) continue
+    if (!outputInfo.isFile() || outputInfo.isSymbolicLink()) continue
+    if (!temporaryInfo || !temporaryInfo.isFile() || temporaryInfo.isSymbolicLink()) continue
+    const outputIdentity = fileSystemIdentityFromBigInts(
+      outputInfo.dev,
+      outputInfo.ino,
+      outputInfo.mode
+    )
+    const temporaryIdentity = fileSystemIdentityFromBigInts(
+      temporaryInfo.dev,
+      temporaryInfo.ino,
+      temporaryInfo.mode
+    )
+    if (!sameFileSystemIdentity(outputIdentity, temporaryIdentity)) continue
+    if (artifact.identity && !sameFileSystemIdentity(outputIdentity, artifact.identity)) continue
+    if (artifact.outputSha256) {
+      try {
+        await attestExactFile({
+          absolutePath: temporaryPath,
+          expectedIdentity: outputIdentity,
+          expectedSha256: artifact.outputSha256
+        })
+        await attestExactFile({
+          absolutePath: outputPath,
+          expectedIdentity: outputIdentity,
+          expectedSha256: artifact.outputSha256
+        })
+      } catch {
+        continue
+      }
+    }
+    await unlink(outputPath)
+  }
 }
 
 async function detectDocumentType(filePath: string, signal?: AbortSignal): Promise<DocumentType> {

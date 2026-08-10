@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 export const ReviewFindingTypeSchema = z.enum([
   'multiple-bidder-names',
+  'role-confusion',
   'project-mismatch',
   'fixed-parameter-mismatch',
   'internal-conflict',
@@ -48,6 +49,7 @@ export const ReviewFindingSchema = z
 export const ReviewRequestSchema = z
   .object({
     schemaVersion: z.literal(1),
+    taskId: z.string().uuid(),
     tenderInputId: z.string().uuid(),
     bidInputId: z.string().uuid(),
     outputDirectoryId: z.string().uuid(),
@@ -62,6 +64,14 @@ export const ReviewReportSchema = z
     taskId: z.string().uuid(),
     tenderName: z.string().trim().min(1).max(255),
     bidName: z.string().trim().min(1).max(255),
+    tenderSha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/u)
+      .optional(),
+    bidSha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/u)
+      .optional(),
     findings: z.array(ReviewFindingSchema).max(5_000),
     deterministicCount: z.number().int().nonnegative(),
     aiCount: z.number().int().nonnegative(),
@@ -76,7 +86,19 @@ export const ReviewResultSchema = z
     taskId: z.string().uuid(),
     report: ReviewReportSchema,
     jsonReport: z.string().trim().min(1).max(255),
-    htmlReport: z.string().trim().min(1).max(255)
+    htmlReport: z.string().trim().min(1).max(255),
+    files: z
+      .array(
+        z
+          .object({
+            fileId: z.string().uuid(),
+            displayName: z.string().trim().min(1).max(255),
+            kind: z.enum(['json-report', 'html-report'])
+          })
+          .strict()
+      )
+      .max(2)
+      .default([])
   })
   .strict()
 

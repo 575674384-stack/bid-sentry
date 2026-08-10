@@ -35,10 +35,12 @@ export interface BidSentryApi {
   installUpdate(): Promise<IpcResponseEnvelope>
   openReleasePage(): Promise<IpcResponseEnvelope>
   openDiagnosticsDirectory(): Promise<IpcResponseEnvelope>
+  startReview(): Promise<IpcResponseEnvelope>
   runReview(request: ReviewRequest): Promise<IpcResponseEnvelope>
   cancelReview(taskId: string): Promise<IpcResponseEnvelope>
   previewGeneration(request: GenerationPreviewRequest): Promise<IpcResponseEnvelope>
   runGeneration(request: GenerationRequest): Promise<IpcResponseEnvelope>
+  cancelGeneration(taskId: string): Promise<IpcResponseEnvelope>
 }
 
 const api: BidSentryApi = {
@@ -97,6 +99,7 @@ const api: BidSentryApi = {
     invoke(IPC_CHANNELS.updatesOpenRelease, {}, IPC_RESPONSE_DATA_SCHEMAS.updatesOpenRelease),
   openDiagnosticsDirectory: () =>
     invoke(IPC_CHANNELS.diagnosticsOpen, {}, IPC_RESPONSE_DATA_SCHEMAS.diagnosticsOpen),
+  startReview: () => invoke(IPC_CHANNELS.reviewStart, {}, IPC_RESPONSE_DATA_SCHEMAS.reviewStart),
   runReview: (request) =>
     invoke(IPC_CHANNELS.reviewRun, request, IPC_RESPONSE_DATA_SCHEMAS.reviewRun),
   cancelReview: (taskId) =>
@@ -104,7 +107,9 @@ const api: BidSentryApi = {
   previewGeneration: (request) =>
     invoke(IPC_CHANNELS.generationPreview, request, IPC_RESPONSE_DATA_SCHEMAS.generationPreview),
   runGeneration: (request) =>
-    invoke(IPC_CHANNELS.generationRun, request, IPC_RESPONSE_DATA_SCHEMAS.generationRun)
+    invoke(IPC_CHANNELS.generationRun, request, IPC_RESPONSE_DATA_SCHEMAS.generationRun),
+  cancelGeneration: (taskId) =>
+    invoke(IPC_CHANNELS.generationCancel, { taskId }, IPC_RESPONSE_DATA_SCHEMAS.generationCancel)
 }
 Object.freeze(api)
 

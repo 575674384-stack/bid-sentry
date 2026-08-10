@@ -20,12 +20,15 @@ import {
   UpdateDownloadRequestSchema,
   UpdateInstallRequestSchema,
   UpdatesOpenReleaseRequestSchema,
+  ReviewStartRequestSchema,
   ReviewRunRequestSchema,
   ReviewCancelRequestSchema,
   GenerationPreviewRequestSchema,
   GenerationRequestSchema,
+  GenerationCancelRequestSchema,
   createAppError,
   toSafeAppError,
+  withDiagnostic,
   type AppError,
   type IpcResponseEnvelope,
   type TaskProgress
@@ -80,6 +83,8 @@ type PayloadSchema<T> = { parse(value: unknown): T }
 export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
   const registry = dependencies.pathRegistry ?? new PathRegistry()
   const taskOwners = new Map<string, number>()
+  const reviewTaskOwners = new Map<string, number>()
+  const generationTaskOwners = new Map<string, number>()
   const pendingCompletions = new Map<string, TaskProgress>()
   const senders = new Map<number, IpcSender>()
   const registeredChannels: string[] = []
@@ -94,6 +99,16 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
       }
       taskOwners.delete(taskId)
       pendingCompletions.delete(taskId)
+    }
+    for (const [taskId, taskOwnerId] of reviewTaskOwners) {
+      if (taskOwnerId !== ownerId) continue
+      dependencies.reviewTaskManager?.cancel(taskId)
+      reviewTaskOwners.delete(taskId)
+    }
+    for (const [taskId, taskOwnerId] of generationTaskOwners) {
+      if (taskOwnerId !== ownerId) continue
+      dependencies.generationTaskManager?.cancel(taskId)
+      generationTaskOwners.delete(taskId)
     }
     registry.revokeOwner(ownerId)
     senders.delete(ownerId)
@@ -138,7 +153,7 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
           schemaVersion: 1,
           requestId,
           ok: false,
-          error: safeIpcError(error)
+          error: safeIpcError(error, channel)
         })
       }
     })
@@ -188,6 +203,16 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
   }
   if (dependencies.reviewTaskManager) {
     register(
+      IPC_CHANNELS.reviewStart,
+      ReviewStartRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.reviewStart,
+      async (event) => {
+        const taskId = randomUUID()
+        reviewTaskOwners.set(taskId, event.sender.id)
+        return { schemaVersion: 1, taskId }
+      }
+    )
+    register(
       IPC_CHANNELS.reviewRun,
       ReviewRunRequestSchema,
       IPC_RESPONSE_DATA_SCHEMAS.reviewRun,
@@ -196,20 +221,32 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
         const bid = registry.resolveInputs(event.sender.id, [request.bidInputId])[0]
         if (!tender || !bid) throw new DocumentSafetyError('INVALID_REQUEST')
         const output = registry.resolveOutputDirectory(event.sender.id, request.outputDirectoryId)
-        return dependencies.reviewTaskManager?.run(
-          request,
-          tender.snapshot,
-          bid.snapshot,
-          output.absolutePath
-        )
+        assertTaskOwner(reviewTaskOwners, request.taskId, event.sender.id)
+        try {
+          const result = await dependencies.reviewTaskManager?.run(
+            request,
+            tender.snapshot,
+            bid.snapshot,
+            output.absolutePath,
+            output.identity
+          )
+          if (!result) throw new DocumentSafetyError('INTERNAL_ERROR')
+          return registry.registerReviewResult(event.sender.id, output.absolutePath, result)
+        } finally {
+          if (reviewTaskOwners.get(request.taskId) === event.sender.id) {
+            reviewTaskOwners.delete(request.taskId)
+          }
+        }
       }
     )
     register(
       IPC_CHANNELS.reviewCancel,
       ReviewCancelRequestSchema,
       IPC_RESPONSE_DATA_SCHEMAS.reviewCancel,
-      async (_event, request) => {
+      async (event, request) => {
+        assertTaskOwner(reviewTaskOwners, request.taskId, event.sender.id)
         dependencies.reviewTaskManager?.cancel(request.taskId)
+        reviewTaskOwners.delete(request.taskId)
         return { schemaVersion: 1, cancelled: true }
       }
     )
@@ -222,7 +259,26 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
       async (event, request) => {
         const input = registry.resolveInputs(event.sender.id, [request.inputId])[0]
         if (!input) throw new DocumentSafetyError('INVALID_REQUEST')
-        return dependencies.generationTaskManager?.preview(request, input.snapshot)
+        // Main allocates and claims the preview capability before any file
+        // parsing.  A destroyed renderer can therefore cancel an in-flight
+        // preview instead of leaving document text owned by a dead sender.
+        const previewTaskId = randomUUID()
+        generationTaskOwners.set(previewTaskId, event.sender.id)
+        try {
+          const preview = await dependencies.generationTaskManager?.preview(
+            request,
+            input.snapshot,
+            previewTaskId
+          )
+          if (!preview) throw new DocumentSafetyError('INTERNAL_ERROR')
+          if (event.sender.isDestroyed()) throw new DocumentSafetyError('TASK_CANCELLED')
+          if (preview.taskId !== previewTaskId) throw new DocumentSafetyError('INTERNAL_ERROR')
+          return preview
+        } catch (error) {
+          dependencies.generationTaskManager?.cancel(previewTaskId)
+          generationTaskOwners.delete(previewTaskId)
+          throw error
+        }
       }
     )
     register(
@@ -233,7 +289,32 @@ export function registerIpc(dependencies: RegisterIpcDependencies): () => void {
         const input = registry.resolveInputs(event.sender.id, [request.inputId])[0]
         if (!input) throw new DocumentSafetyError('INVALID_REQUEST')
         const output = registry.resolveOutputDirectory(event.sender.id, request.outputDirectoryId)
-        return dependencies.generationTaskManager?.run(request, input.snapshot, output.absolutePath)
+        assertTaskOwner(generationTaskOwners, request.previewTaskId, event.sender.id)
+        try {
+          const result = await dependencies.generationTaskManager?.run(
+            request,
+            input.snapshot,
+            output.absolutePath,
+            output.identity
+          )
+          if (!result) throw new DocumentSafetyError('INTERNAL_ERROR')
+          return registry.registerGenerationResult(event.sender.id, output.absolutePath, result)
+        } finally {
+          if (!dependencies.generationTaskManager?.hasPreview(request.previewTaskId)) {
+            generationTaskOwners.delete(request.previewTaskId)
+          }
+        }
+      }
+    )
+    register(
+      IPC_CHANNELS.generationCancel,
+      GenerationCancelRequestSchema,
+      IPC_RESPONSE_DATA_SCHEMAS.generationCancel,
+      async (event, request) => {
+        assertTaskOwner(generationTaskOwners, request.taskId, event.sender.id)
+        dependencies.generationTaskManager?.cancel(request.taskId)
+        generationTaskOwners.delete(request.taskId)
+        return { schemaVersion: 1, cancelled: true }
       }
     )
   }
@@ -405,12 +486,34 @@ function sendProgress(sender: IpcSender, progress: TaskProgress): void {
   }
 }
 
-function safeIpcError(error: unknown): AppError {
+function safeIpcError(error: unknown, channel: string): AppError {
   if (error instanceof ZodError) return createAppError('INVALID_REQUEST')
   if (error instanceof DocumentSafetyError || error instanceof TaskManagerError) {
-    return error.appError
+    return withDiagnostic(error.appError, diagnosticStageForChannel(channel))
   }
-  return toSafeAppError(error)
+  return withDiagnostic(toSafeAppError(error), diagnosticStageForChannel(channel))
+}
+
+function diagnosticStageForChannel(
+  channel: string
+):
+  | 'input-check'
+  | 'workspace-prepare'
+  | 'document-parse'
+  | 'document-write'
+  | 'verify'
+  | 'publish'
+  | 'cleanup'
+  | 'ai-request'
+  | 'report-write'
+  | 'update'
+  | 'unknown' {
+  if (channel.includes('updates')) return 'update'
+  if (channel.includes('review') && channel.endsWith('run')) return 'publish'
+  if (channel.includes('generation')) return 'publish'
+  if (channel.includes('files')) return 'input-check'
+  if (channel.includes('settings:test-ai')) return 'ai-request'
+  return 'unknown'
 }
 
 function requestIdFromUnknown(request: unknown): string {

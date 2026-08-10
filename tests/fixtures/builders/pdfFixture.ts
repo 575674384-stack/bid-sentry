@@ -46,6 +46,8 @@ export interface PdfFixtureOptions {
   xmpFilterForm?: 'name' | 'array' | 'abbreviated' | 'indirect-array-item'
   xmpDecodeParmsForm?:
     'none' | 'null' | 'empty-dictionary' | 'array-null' | 'array-empty-dictionary' | 'non-default'
+  qualificationTemplate?: boolean
+  multiColumn?: boolean
 }
 
 export async function writePdfFixture(
@@ -70,12 +72,19 @@ export async function writePdfFixture(
     ? 'Unsigned note /ByteRange [0 1 2 3] only'
     : ''
   if (!options.scanned) {
-    firstPage.drawText(
-      byteRangeLookalike
-        ? `${PDF_FIXTURE_VALUES.bodyText} ${byteRangeLookalike}`
-        : PDF_FIXTURE_VALUES.bodyText,
-      { x: 40, y: 450, size: 12, font }
-    )
+    if (options.multiColumn) {
+      firstPage.drawText('Qualification template format', { x: 40, y: 480, size: 18, font })
+      firstPage.drawText('Bidder name: ____________', { x: 40, y: 450, size: 12, font })
+      firstPage.drawText('Project number: 2024-001', { x: 260, y: 450, size: 12, font })
+      firstPage.drawText(PDF_FIXTURE_VALUES.bodyText, { x: 40, y: 420, size: 12, font })
+    } else {
+      firstPage.drawText(
+        byteRangeLookalike
+          ? `${options.qualificationTemplate ? 'Qualification template format\nBidder name: ____________\n' : ''}${PDF_FIXTURE_VALUES.bodyText} ${byteRangeLookalike}`
+          : `${options.qualificationTemplate ? 'Qualification template format\nBidder name: ____________\n' : ''}${PDF_FIXTURE_VALUES.bodyText}`,
+        { x: 40, y: 450, size: 12, font }
+      )
+    }
     secondPage.drawText('Second page content remains unchanged.', {
       x: 40,
       y: 640,

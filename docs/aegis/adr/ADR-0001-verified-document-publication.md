@@ -76,3 +76,37 @@ Path-only workspace cleanup, legacy path-only journal acceptance, and number-bas
 ### Boundary
 
 This amendment is an advisory Aegis Method Pack record. It does not grant completion authority or replace project-authoritative architecture sources.
+
+## Amendment - 2026-08-10 - Harden publication journaling and rollback with creation-time identities, exact hashes, same-inode mutation preservation, root-absent recovery, and pre-delete revalidation.
+
+- Status: amended
+
+### Source Evidence
+
+- Fresh verified-publication, workspace-journal, file-safety and task-manager regression suites; final local quality gate; independent publication/security review.
+### Change Summary
+
+Harden publication journaling and rollback with creation-time identities, exact hashes, same-inode mutation preservation, root-absent recovery, and pre-delete revalidation.
+
+### Compatibility Boundary
+
+Windows/Linux x64; DOCX/PDF; outputs are removed only when exact journaled root/output/artifact identity and expected SHA-256 still attest; user replacements or same-inode mutations are preserved.
+
+### Retirement Impact
+
+Path-only recovery, broad output-directory scans, unverified rollback deletion, and cleanup without a journaled workspace identity remain retired; no second writer or best-effort completion path is retained.
+
+### Baseline Sync
+
+- Needed: needed
+- Target: docs/aegis/specs/2026-08-09-bid-sentry-design.md
+- Action: cite unchanged
+- Reason: The design already requires Main-owned verified publication, restricted crash cleanup, input immutability and no best-effort save; this amendment records the executed identity/hash and journal ordering needed to enforce those invariants.
+
+### Evidence References
+
+- docs/aegis/work/2026-08-10-v1-complete-product/90-evidence.md
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-independent-review-final.json
+### Boundary
+
+This amendment is an advisory Aegis Method Pack record. It does not grant completion authority or replace project-authoritative architecture sources.

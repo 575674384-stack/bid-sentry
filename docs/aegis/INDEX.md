@@ -65,3 +65,10 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-updater-boundaries.json | 2026-08-10-v1-complete-product evidence updater-boundaries |
 | 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-pdf-text-layer.json | 2026-08-10-v1-complete-product evidence pdf-text-layer |
 | 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-cross-platform-gap.json | 2026-08-10-v1-complete-product evidence cross-platform-gap |
+| 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-local-quality-gate-final.json | 2026-08-10-v1-complete-product evidence local-quality-gate-final |
+| 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-electron-e2e-final.json | 2026-08-10-v1-complete-product evidence electron-e2e-final |
+| 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-linux-package-final.json | 2026-08-10-v1-complete-product evidence linux-package-final |
+| 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-packaged-functional-e2e-final.json | 2026-08-10-v1-complete-product evidence packaged-functional-e2e-final |
+| 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-live-ai-compatibility-final.json | 2026-08-10-v1-complete-product evidence live-ai-compatibility-final |
+| 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-libreoffice-compatibility.json | 2026-08-10-v1-complete-product evidence libreoffice-compatibility |
+| 2026-08-10 | artifact | docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-independent-review-final.json | 2026-08-10-v1-complete-product evidence independent-review-final |

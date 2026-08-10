@@ -25,10 +25,17 @@ This proof bundle is an advisory Aegis Method Pack record. It does not determine
 ## Evidence Bundle Refs
 
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-cross-platform-gap.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-electron-e2e-final.json
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-electron-e2e.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-independent-review-final.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-libreoffice-compatibility.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-linux-package-final.json
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-linux-package.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-live-ai-compatibility-final.json
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-live-ai-compatibility.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-local-quality-gate-final.json
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-local-quality-gate.json
+- docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-packaged-functional-e2e-final.json
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-packaged-functional-e2e.json
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-pdf-text-layer.json
 - docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-updater-boundaries.json

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "libreoffice-compatibility",
+  "type": "manual",
+  "source": "headless LibreOffice conversion of a synthetic DOCX to PDF",
+  "summary": "LibreOffice is installed and converted a synthetic Word 2007+ DOCX to a one-page PDF; Microsoft Word, WPS, and GUI PDF readers are unavailable on this host.",
+  "verifier": "coordinator main-worktree verification 2026-08-10"
+}

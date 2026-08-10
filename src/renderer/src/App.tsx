@@ -4,6 +4,8 @@ import { SettingsPage } from './features/settings/SettingsPage'
 import { ReviewPage } from './features/review/ReviewPage'
 import { GenerationPage } from './features/generation/GenerationPage'
 
+declare const __BID_SENTRY_VERSION__: string
+
 type Page = 'sanitizer' | 'review' | 'generation' | 'settings'
 
 const PAGE_COPY: Readonly<Record<Page, { eyebrow: string; title: string; description: string }>> = {
@@ -112,7 +114,7 @@ export function App(): React.JSX.Element {
             <span>原文件只读 · 验证后发布</span>
           </div>
         </div>
-        <p className="sidebar-version">v1.0.0 · 开源本地工具</p>
+        <p className="sidebar-version">v{__BID_SENTRY_VERSION__} · 开源本地工具</p>
       </aside>
 
       <main className="workspace">

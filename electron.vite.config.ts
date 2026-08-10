@@ -1,6 +1,16 @@
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+
+const packageVersion = (
+  JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+    version?: unknown
+  }
+).version
+if (typeof packageVersion !== 'string' || packageVersion.length === 0) {
+  throw new Error('package.json version is missing')
+}
 
 export default defineConfig({
   main: {
@@ -37,6 +47,9 @@ export default defineConfig({
   },
   renderer: {
     root: resolve('src/renderer'),
-    plugins: [react()]
+    plugins: [react()],
+    define: {
+      __BID_SENTRY_VERSION__: JSON.stringify(packageVersion)
+    }
   }
 })

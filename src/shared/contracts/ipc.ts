@@ -31,10 +31,12 @@ export const IPC_CHANNELS = Object.freeze({
   updatesDownload: 'updates:download',
   updatesInstall: 'updates:install',
   updatesOpenRelease: 'updates:open-release',
+  reviewStart: 'review:start',
   reviewRun: 'review:run',
   reviewCancel: 'review:cancel',
   generationPreview: 'generation:preview',
-  generationRun: 'generation:run'
+  generationRun: 'generation:run',
+  generationCancel: 'generation:cancel'
 } as const)
 
 export const EmptyPayloadSchema = z.object({}).strict()
@@ -90,8 +92,10 @@ export const OpenResultFileRequestSchema = z
   .strict()
 
 export const UpdatesOpenReleaseRequestSchema = EmptyPayloadSchema
+export const ReviewStartRequestSchema = EmptyPayloadSchema
 export const ReviewRunRequestSchema = ReviewRequestSchema
 export const ReviewCancelRequestSchema = TaskCancelRequestSchema
+export const GenerationCancelRequestSchema = TaskCancelRequestSchema
 
 export const TaskCancellationResultSchema = z
   .object({
@@ -104,6 +108,13 @@ export const ResultShownSchema = z
   .object({
     schemaVersion: z.literal(1),
     shown: z.literal(true)
+  })
+  .strict()
+
+export const TaskStartResultSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    taskId: z.string().uuid()
   })
   .strict()
 
@@ -123,10 +134,12 @@ export const IPC_RESPONSE_DATA_SCHEMAS = Object.freeze({
   updatesDownload: UpdateStatusSchema,
   updatesInstall: UpdateStatusSchema,
   updatesOpenRelease: UpdateActionResultSchema,
+  reviewStart: TaskStartResultSchema,
   reviewRun: ReviewResultSchema,
   reviewCancel: TaskCancellationResultSchema,
   generationPreview: GenerationPreviewSchema,
-  generationRun: GenerationResultSchema
+  generationRun: GenerationResultSchema,
+  generationCancel: TaskCancellationResultSchema
 })
 
 export const IpcRequestEnvelopeSchema = z
@@ -165,3 +178,4 @@ export type IpcResponseEnvelope = z.infer<typeof IpcResponseEnvelopeSchema>
 export type SelectedInputFile = z.infer<typeof SelectedInputFileSchema>
 export type SelectedInputFiles = z.infer<typeof SelectedInputFilesSchema>
 export type SelectedOutputDirectory = z.infer<typeof SelectedOutputDirectorySchema>
+export type TaskStartResult = z.infer<typeof TaskStartResultSchema>

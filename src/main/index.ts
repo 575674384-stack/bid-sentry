@@ -57,6 +57,8 @@ function createWindow(onReady?: () => void): BrowserWindow {
 
 let disposeIpc: (() => void) | null = null
 let activeTaskManager: TaskManager | null = null
+let activeReviewTaskManager: ReviewTaskManager | null = null
+let activeGenerationTaskManager: GenerationTaskManager | null = null
 let shutdownStarted = false
 let shutdownComplete = false
 let activeWindowController: WindowController | null = null
@@ -104,9 +106,18 @@ async function startApplication(): Promise<void> {
     forgetWorkspace: (workspace) => workspaceJournal.remove(workspace),
     diagnostics
   })
-  const reviewTaskManager = new ReviewTaskManager({ settingsService })
-  const generationTaskManager = new GenerationTaskManager()
+  const reviewTaskManager = new ReviewTaskManager({
+    settingsService,
+    recordWorkspace: (workspace) => workspaceJournal.add(workspace),
+    forgetWorkspace: (workspace) => workspaceJournal.remove(workspace)
+  })
+  const generationTaskManager = new GenerationTaskManager({
+    recordWorkspace: (workspace) => workspaceJournal.add(workspace),
+    forgetWorkspace: (workspace) => workspaceJournal.remove(workspace)
+  })
   activeTaskManager = taskManager
+  activeReviewTaskManager = reviewTaskManager
+  activeGenerationTaskManager = generationTaskManager
   disposeIpc = registerIpc({
     ipcMain: ipcMain as unknown as IpcMainLike,
     settingsService,
@@ -225,9 +236,16 @@ app.on('before-quit', (event) => {
   disposeIpc?.()
   disposeIpc = null
   void (activeTaskManager?.shutdown() ?? Promise.resolve()).finally(() => {
-    activeTaskManager = null
-    shutdownComplete = true
-    app.quit()
+    void Promise.all([
+      activeReviewTaskManager?.shutdown() ?? Promise.resolve(),
+      activeGenerationTaskManager?.shutdown() ?? Promise.resolve()
+    ]).finally(() => {
+      activeTaskManager = null
+      activeReviewTaskManager = null
+      activeGenerationTaskManager = null
+      shutdownComplete = true
+      app.quit()
+    })
   })
 })
 

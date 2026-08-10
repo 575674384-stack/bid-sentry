@@ -39,6 +39,14 @@ export const VerificationReportSchema = z
     status: z.enum(['passed', 'failed']),
     checks: z.array(VerificationCheckSchema).min(1).max(10_000),
     inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    // Multi-document reports (for example bid-vs-tender review) bind every
+    // frozen input while retaining the v1 single-input field for sanitizer
+    // compatibility.
+    inputSha256s: z
+      .array(z.string().regex(/^[a-f0-9]{64}$/u))
+      .min(1)
+      .max(20)
+      .optional(),
     outputSha256: z.string().regex(/^[a-f0-9]{64}$/u)
   })
   .strict()
@@ -171,6 +179,9 @@ export const SanitizationFileResultSchema = z
   .superRefine((file, context) => {
     if (
       file.input.sha256 !== file.verification.inputSha256 ||
+      (file.verification.inputSha256s &&
+        (file.verification.inputSha256s.length !== 1 ||
+          file.verification.inputSha256s[0] !== file.input.sha256)) ||
       file.output.sha256 !== file.verification.outputSha256 ||
       file.input.documentType !== file.output.documentType ||
       file.output.displayName !== file.outputDisplayName

@@ -12,12 +12,31 @@ export const FileSystemIdentitySchema = z
   })
   .strict()
 
+export const WorkspacePublicationArtifactSchema = z
+  .object({
+    temporaryPath: z.string().min(1),
+    outputPath: z.string().min(1),
+    outputSha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/u)
+      .optional(),
+    identity: FileSystemIdentitySchema.optional()
+  })
+  .strict()
+
+export const WorkspacePublicationSchema = z
+  .object({
+    artifacts: z.array(WorkspacePublicationArtifactSchema).min(1).max(20)
+  })
+  .strict()
+
 export const TemporaryWorkspaceDescriptorSchema = z
   .object({
     rootPath: z.string().min(1),
     outputDirectory: z.string().min(1),
     rootIdentity: FileSystemIdentitySchema,
-    outputDirectoryIdentity: FileSystemIdentitySchema
+    outputDirectoryIdentity: FileSystemIdentitySchema,
+    publication: WorkspacePublicationSchema.optional()
   })
   .strict()
 
@@ -95,6 +114,8 @@ export const MetadataPreviewItemSchema = z
 
 export type DocumentType = z.infer<typeof DocumentTypeSchema>
 export type FileSystemIdentity = z.infer<typeof FileSystemIdentitySchema>
+export type WorkspacePublicationArtifact = z.infer<typeof WorkspacePublicationArtifactSchema>
+export type WorkspacePublication = z.infer<typeof WorkspacePublicationSchema>
 export type TemporaryWorkspaceDescriptor = z.infer<typeof TemporaryWorkspaceDescriptorSchema>
 export type InputSnapshot = z.infer<typeof InputSnapshotSchema>
 export type ReportFileIdentity = z.infer<typeof ReportFileIdentitySchema>

@@ -10,7 +10,11 @@ import {
   type SanitizationTaskResult,
   type SelectedInputFiles,
   type SelectedOutputDirectory,
-  type WorkerExecutionResult
+  type WorkerExecutionResult,
+  ReviewResultSchema,
+  GenerationResultSchema,
+  type ReviewResult,
+  type GenerationResult
 } from '../../shared/contracts'
 import { DocumentSafetyError } from '../../core/documents/fileSafety'
 import { resolvePathIdentityWithoutSymbolicLinks } from '../../core/documents/pathSafety'
@@ -149,6 +153,32 @@ export class PathRegistry {
     })
   }
 
+  registerReviewResult(
+    ownerId: number,
+    outputDirectory: string,
+    result: ReviewResult
+  ): ReviewResult {
+    const expectedDirectory = resolve(outputDirectory)
+    const files = [
+      this.registerResultPath(ownerId, expectedDirectory, result.jsonReport, 'json-report'),
+      this.registerResultPath(ownerId, expectedDirectory, result.htmlReport, 'html-report')
+    ]
+    return ReviewResultSchema.parse({ ...result, files })
+  }
+
+  registerGenerationResult(
+    ownerId: number,
+    outputDirectory: string,
+    result: GenerationResult
+  ): GenerationResult {
+    const expectedDirectory = resolve(outputDirectory)
+    const files = [
+      this.registerResultPath(ownerId, expectedDirectory, result.outputName, 'generated-document'),
+      this.registerResultPath(ownerId, expectedDirectory, result.reportName, 'json-report')
+    ]
+    return GenerationResultSchema.parse({ ...result, files })
+  }
+
   resolveResultFile(ownerId: number, fileId: string): string {
     return this.#owned(this.#resultFiles, fileId, ownerId).absolutePath
   }
@@ -163,6 +193,25 @@ export class PathRegistry {
     const entry = registry.get(id)
     if (!entry || entry.ownerId !== ownerId) throw new DocumentSafetyError('INVALID_REQUEST')
     return entry
+  }
+
+  private registerResultPath(
+    ownerId: number,
+    expectedDirectory: string,
+    displayName: string,
+    kind: 'json-report' | 'html-report' | 'generated-document'
+  ) {
+    const absolutePath = resolve(expectedDirectory, displayName)
+    if (
+      !displayName ||
+      basename(absolutePath) !== displayName ||
+      dirname(absolutePath) !== expectedDirectory
+    ) {
+      throw new DocumentSafetyError('INTERNAL_ERROR')
+    }
+    const fileId = randomUUID()
+    this.#resultFiles.set(fileId, { ownerId, absolutePath })
+    return { fileId, displayName, kind }
   }
 }
 

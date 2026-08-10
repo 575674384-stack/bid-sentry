@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "linux-package-final",
+  "type": "command",
+  "source": "pnpm package:linux; pnpm audit:package; packaged production startup E2E",
+  "summary": "Latest serial Linux x64 package built, ASAR audit passed, and production package startup E2E passed.",
+  "verifier": "coordinator main-worktree verification 2026-08-10"
+}

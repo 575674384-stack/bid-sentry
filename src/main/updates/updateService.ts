@@ -20,6 +20,7 @@ interface ReleaseResponse {
   tag_name?: string
   body?: string
   html_url?: string
+  published_at?: string
   assets?: ReleaseAsset[]
 }
 
@@ -74,7 +75,9 @@ export class UpdateService {
     this.#status = UpdateStatusSchema.parse({
       schemaVersion: 1,
       state: 'idle',
-      currentVersion: this.#currentVersion
+      currentVersion: this.#currentVersion,
+      packageType: this.#packageType,
+      signatureStatus: 'unsigned'
     })
   }
 
@@ -239,6 +242,9 @@ export class UpdateService {
         state: 'available',
         latestVersion: version,
         releaseUrl: RELEASE_URL,
+        ...(normalizeReleaseDate(release.published_at)
+          ? { releasePublishedAt: normalizeReleaseDate(release.published_at) }
+          : {}),
         releaseNotes: normalizeReleaseNotes(release.body),
         message: '发现新版本，请确认后下载。'
       })
@@ -278,12 +284,24 @@ export class UpdateService {
   }
 
   #set(input: Partial<UpdateStatus>): UpdateStatus {
-    this.#status = UpdateStatusSchema.parse({
+    const next = {
       ...this.#status,
       ...input,
       schemaVersion: 1,
-      currentVersion: this.#currentVersion
-    })
+      currentVersion: this.#currentVersion,
+      packageType: this.#packageType,
+      signatureStatus: 'unsigned' as const
+    }
+    if (next.state === 'error' || next.state === 'idle' || next.state === 'checking') {
+      delete next.latestVersion
+      delete next.releaseNotes
+      delete next.releasePublishedAt
+      delete next.assetName
+      delete next.downloadedPathId
+    }
+    if (next.state !== 'downloaded') delete next.downloadedPathId
+    if (next.state === 'manual-only') delete next.assetName
+    this.#status = UpdateStatusSchema.parse(next)
     return this.#status
   }
 }
@@ -333,6 +351,12 @@ function isTrustedReleaseAsset(asset: ReleaseAsset, tagName: string): boolean {
 
 function normalizeReleaseNotes(value: string | null | undefined): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value.slice(0, 20_000) : undefined
+}
+
+function normalizeReleaseDate(value: string | null | undefined): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined
 }
 
 function assertTrustedRedirect(response: Response): void {

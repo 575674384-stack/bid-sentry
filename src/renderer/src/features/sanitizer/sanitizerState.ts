@@ -163,6 +163,7 @@ export function sanitizerReducer(state: SanitizerState, action: SanitizerAction)
         return {
           ...state,
           stage: 'cancelled',
+          preview: null,
           progress: 0,
           progressMessage: action.progress.message,
           cancelling: false
@@ -172,6 +173,7 @@ export function sanitizerReducer(state: SanitizerState, action: SanitizerAction)
         return {
           ...state,
           stage: 'failed',
+          preview: null,
           progress: 0,
           progressMessage: action.progress.message,
           cancelling: false,
@@ -214,6 +216,7 @@ export function sanitizerReducer(state: SanitizerState, action: SanitizerAction)
       return {
         ...state,
         stage: 'completed',
+        preview: null,
         result: action.result,
         progress: 1,
         progressMessage: '全部文件已清洗并通过内容验证。',
@@ -224,6 +227,7 @@ export function sanitizerReducer(state: SanitizerState, action: SanitizerAction)
       return {
         ...state,
         stage: 'failed',
+        preview: null,
         progress: 0,
         progressMessage: '任务未完成。',
         cancelling: false,

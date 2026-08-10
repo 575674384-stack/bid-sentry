@@ -20,6 +20,8 @@ export const DOCX_FIXTURE_VALUES = Object.freeze({
   tableText: '表格内容保持不变',
   headerText: '页眉内容',
   footerText: '页脚内容',
+  secondHeaderText: '第二节页眉内容',
+  secondFooterText: '第二节页脚内容',
   sensitiveCustomName: 'Customer-Acme-Secret-Property',
   unsupportedCustomValue: 'UNSUPPORTED-CUSTOM-VALUE'
 })
@@ -50,6 +52,13 @@ export interface DocxFixtureOptions {
   doubleEncodedRelationshipTarget?: boolean
   orphanRelationshipPart?: boolean
   distinctManager?: boolean
+  qualificationTemplate?: boolean
+  splitBidderNameCells?: boolean
+  structuredDocumentTag?: boolean
+  rootUnrelatedAttachment?: boolean
+  externalDocumentRelationship?: boolean
+  notesWithMedia?: boolean
+  multiSection?: boolean
 }
 
 export async function writeDocxFixture(
@@ -85,12 +94,21 @@ function addDocxEntries(zipFile: yazl.ZipFile, options: DocxFixtureOptions): voi
   addBuffer(
     zipFile,
     '[Content_Types].xml',
-    contentTypesXml(options.macroEnabled === true, options.signedDocument === true)
+    contentTypesXml(
+      options.macroEnabled === true,
+      options.signedDocument === true,
+      options.notesWithMedia === true,
+      options.multiSection === true
+    )
   )
   addBuffer(
     zipFile,
     '_rels/.rels',
-    rootRelationshipsXml(options.externalMainRelationship === true, options.signedDocument === true)
+    rootRelationshipsXml(
+      options.externalMainRelationship === true,
+      options.signedDocument === true,
+      options.rootUnrelatedAttachment === true
+    )
   )
   addBuffer(
     zipFile,
@@ -108,7 +126,7 @@ function addDocxEntries(zipFile: yazl.ZipFile, options: DocxFixtureOptions): voi
     'docProps/custom.xml',
     customPropertiesXml(options.foreignCustomValueNamespace === true)
   )
-  addBuffer(zipFile, 'word/document.xml', documentXml())
+  addBuffer(zipFile, 'word/document.xml', documentXml(options))
   addBuffer(
     zipFile,
     'word/_rels/document.xml.rels',
@@ -120,11 +138,30 @@ function addDocxEntries(zipFile: yazl.ZipFile, options: DocxFixtureOptions): voi
   addBuffer(zipFile, 'word/comments.xml', commentsXml())
   addBuffer(zipFile, 'word/header1.xml', headerXml())
   addBuffer(zipFile, 'word/footer1.xml', footerXml())
+  if (options.multiSection) {
+    addBuffer(zipFile, 'word/header2.xml', secondHeaderXml())
+    addBuffer(zipFile, 'word/footer2.xml', secondFooterXml())
+  }
+  if (options.notesWithMedia) {
+    addBuffer(zipFile, 'word/footnotes.xml', footnotesXml())
+    addBuffer(zipFile, 'word/_rels/footnotes.xml.rels', footnotesRelationshipsXml())
+    zipFile.addBuffer(DOCX_FIXTURE_IMAGE, 'word/media/note1.png', {
+      mtime: FIXTURE_DATE,
+      mode: 0o600,
+      compress: false
+    })
+    zipFile.addBuffer(Buffer.from('unselected-note-media'), 'word/media/note2.png', {
+      mtime: FIXTURE_DATE,
+      mode: 0o600,
+      compress: false
+    })
+  }
   zipFile.addBuffer(DOCX_FIXTURE_IMAGE, 'word/media/image1.png', {
     mtime: FIXTURE_DATE,
     mode: 0o600,
     compress: false
   })
+  if (options.rootUnrelatedAttachment) addBuffer(zipFile, 'word/media/unrelated.png', 'unrelated')
 
   if (options.macroEnabled) {
     zipFile.addBuffer(Buffer.from('synthetic-vba-placeholder'), 'word/vbaProject.bin', {
@@ -196,7 +233,12 @@ async function writeZipFile(zipFile: yazl.ZipFile, filePath: string): Promise<vo
   })
 }
 
-function contentTypesXml(macroEnabled: boolean, signedDocument: boolean): string {
+function contentTypesXml(
+  macroEnabled: boolean,
+  signedDocument: boolean,
+  notesWithMedia: boolean,
+  multiSection: boolean
+): string {
   const mainContentType = macroEnabled
     ? 'application/vnd.ms-word.document.macroEnabled.main+xml'
     : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'
@@ -210,6 +252,8 @@ function contentTypesXml(macroEnabled: boolean, signedDocument: boolean): string
   <Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>
   <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
   <Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
+  ${multiSection ? '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/footer2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : ''}
+  ${notesWithMedia ? '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' : ''}
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
   <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
   <Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/>
@@ -217,12 +261,17 @@ function contentTypesXml(macroEnabled: boolean, signedDocument: boolean): string
 </Types>`
 }
 
-function rootRelationshipsXml(externalMainRelationship: boolean, signedDocument: boolean): string {
+function rootRelationshipsXml(
+  externalMainRelationship: boolean,
+  signedDocument: boolean,
+  rootUnrelatedAttachment: boolean
+): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
   ${externalMainRelationship ? '<Relationship Id="rIdExternalMain" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="https://example.invalid/document.xml" TargetMode="External"/>' : ''}
   ${signedDocument ? '<Relationship Id="rIdSignatureOrigin" Type="http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin" Target="_xmlsignatures/origin.sigs"/>' : ''}
+  ${rootUnrelatedAttachment ? '<Relationship Id="rIdUnrelated" Type="http://schemas.openxmlformats.org/package/2006/relationships/thumbnail" Target="word/media/unrelated.png"/>' : ''}
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
   <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
   <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" Target="docProps/custom.xml"/>
@@ -285,12 +334,22 @@ function customPropertiesXml(foreignValueNamespace: boolean): string {
 </Properties>`
 }
 
-function documentXml(): string {
+function documentXml(options: DocxFixtureOptions): string {
   const values = DOCX_FIXTURE_VALUES
+  const firstSectionBoundary = options.multiSection
+    ? '<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/><w:footerReference w:type="default" r:id="rIdFooter"/></w:sectPr></w:pPr><w:r><w:t>选中模板第一节结束</w:t></w:r></w:p>'
+    : ''
+  const finalSectionProperties = options.multiSection
+    ? '<w:sectPr><w:headerReference w:type="default" r:id="rIdHeader2"/><w:footerReference w:type="default" r:id="rIdFooter2"/></w:sectPr>'
+    : '<w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/><w:footerReference w:type="default" r:id="rIdFooter"/></w:sectPr>'
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
   <w:body>
+    ${options.qualificationTemplate ? `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>资格审查投标文件格式</w:t></w:r>${options.notesWithMedia ? '<w:r><w:footnoteReference w:id="1"/></w:r>' : ''}</w:p>` : ''}
+    ${options.qualificationTemplate && !options.splitBidderNameCells ? '<w:p><w:r><w:t>投标人名称：________________</w:t></w:r></w:p>' : ''}
+    ${options.qualificationTemplate ? '<w:p><w:r><w:drawing><wp:inline r:embed="rIdImage"><wp:extent cx="100" cy="100"/><wp:docPr id="1" name="Synthetic image"/><a:graphic/></wp:inline></w:drawing></w:r></w:p>' : ''}
     <w:p><w:r><w:t>${values.bodyText}</w:t></w:r></w:p>
+    ${options.qualificationTemplate && options.splitBidderNameCells ? '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>投标人名称</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc></w:tr></w:tbl>' : ''}
     <w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>${values.tableText}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
     <w:p>
       <w:commentRangeStart w:id="0"/>
@@ -298,7 +357,10 @@ function documentXml(): string {
       <w:commentRangeEnd w:id="0"/>
       <w:r><w:commentReference w:id="0"/></w:r>
     </w:p>
-    <w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/><w:footerReference w:type="default" r:id="rIdFooter"/></w:sectPr>
+    ${options.qualificationTemplate && options.structuredDocumentTag ? '<w:sdt><w:sdtPr/><w:sdtContent><w:p><w:r><w:t>受控模板内容</w:t></w:r></w:p></w:sdtContent></w:sdt>' : ''}
+    ${firstSectionBoundary}
+    ${options.qualificationTemplate ? `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>其他投标文件正文（范围外）</w:t></w:r>${options.notesWithMedia ? '<w:r><w:footnoteReference w:id="2"/></w:r>' : ''}</w:p>` : ''}
+    ${finalSectionProperties}
   </w:body>
 </w:document>`
 }
@@ -319,8 +381,18 @@ function documentRelationshipsXml(options: DocxFixtureOptions): string {
   <Relationship Id="rIdComments" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>
   <Relationship Id="rIdHeader" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
   <Relationship Id="rIdFooter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>
-  <Relationship Id="rIdExternal" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.invalid/reference" TargetMode="External"/>
+  ${options.multiSection ? '<Relationship Id="rIdHeader2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/><Relationship Id="rIdFooter2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer2.xml"/>' : ''}
+  ${options.notesWithMedia ? '<Relationship Id="rIdFootnotes" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes" Target="footnotes.xml"/>' : ''}
+  ${options.externalDocumentRelationship === false ? '' : '<Relationship Id="rIdExternal" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.invalid/reference" TargetMode="External"/>'}
 </Relationships>`
+}
+
+function footnotesXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:footnote w:id="-1"><w:p/></w:footnote><w:footnote w:id="0"><w:p/></w:footnote><w:footnote w:id="1"><w:p><w:r><w:t>Selected note</w:t></w:r><w:r><w:drawing r:embed="rIdNoteImage1"/></w:r></w:p></w:footnote><w:footnote w:id="2"><w:p><w:r><w:t>Unselected note</w:t></w:r><w:r><w:drawing r:embed="rIdNoteImage2"/></w:r></w:p></w:footnote></w:footnotes>`
+}
+
+function footnotesRelationshipsXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdNoteImage1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/note1.png"/><Relationship Id="rIdNoteImage2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/note2.png"/></Relationships>`
 }
 
 function stylesXml(): string {
@@ -340,6 +412,14 @@ function headerXml(): string {
 
 function footerXml(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>${DOCX_FIXTURE_VALUES.footerText}</w:t></w:r></w:p></w:ftr>`
+}
+
+function secondHeaderXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>${DOCX_FIXTURE_VALUES.secondHeaderText}</w:t></w:r></w:p></w:hdr>`
+}
+
+function secondFooterXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>${DOCX_FIXTURE_VALUES.secondFooterText}</w:t></w:r></w:p></w:ftr>`
 }
 
 async function patchEntryName(filePath: string, from: string, to: string): Promise<void> {

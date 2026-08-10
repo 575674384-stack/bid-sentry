@@ -29,6 +29,7 @@ export function GenerationPage(): React.JSX.Element {
   const [form, setForm] = useState<GenerationUserForm>(EMPTY_FORM)
   const [preview, setPreview] = useState<GenerationPreview | null>(null)
   const [candidateId, setCandidateId] = useState('')
+  const [planConfirmed, setPlanConfirmed] = useState(false)
   const [result, setResult] = useState<GenerationResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,6 +41,7 @@ export function GenerationPage(): React.JSX.Element {
       if (!candidate) return
       setFile(candidate)
       setPreview(null)
+      setPlanConfirmed(false)
       setResult(null)
     } catch (reason) {
       setError(userMessage(reason))
@@ -52,8 +54,13 @@ export function GenerationPage(): React.JSX.Element {
       setError(userMessage(reason))
     }
   }
-  const update = (key: keyof GenerationUserForm, value: string): void =>
+  const update = (key: keyof GenerationUserForm, value: string): void => {
     setForm((current) => ({ ...current, [key]: value }))
+    setPreview(null)
+    setCandidateId('')
+    setPlanConfirmed(false)
+    setResult(null)
+  }
   const createPreview = async (): Promise<void> => {
     if (!file) return
     const parsed = GenerationUserFormSchema.safeParse(form)
@@ -70,7 +77,8 @@ export function GenerationPage(): React.JSX.Element {
         userForm: parsed.data
       })
       setPreview(value)
-      setCandidateId(value.candidates[0]?.candidateId ?? '')
+      setCandidateId('')
+      setPlanConfirmed(false)
     } catch (reason) {
       setError(userMessage(reason))
     } finally {
@@ -78,9 +86,9 @@ export function GenerationPage(): React.JSX.Element {
     }
   }
   const generate = async (): Promise<void> => {
-    if (!file || !output || !candidateId) return
-    const parsed = GenerationUserFormSchema.safeParse(form)
-    if (!parsed.success) return
+    if (!file || !output || !preview || !candidateId) return
+    const selectedPlan = preview.plans.find((plan) => plan.candidateId === candidateId)
+    if (!selectedPlan) return
     setBusy(true)
     setError(null)
     try {
@@ -89,8 +97,10 @@ export function GenerationPage(): React.JSX.Element {
           schemaVersion: 1,
           inputId: file.inputId,
           outputDirectoryId: output.outputDirectoryId,
+          previewTaskId: preview.taskId,
           candidateId,
-          userForm: parsed.data,
+          planId: selectedPlan.planId,
+          planDigest: selectedPlan.planDigest,
           confirmed: true
         })
       )
@@ -100,6 +110,15 @@ export function GenerationPage(): React.JSX.Element {
       setBusy(false)
     }
   }
+  const cancel = async (): Promise<void> => {
+    if (!preview) return
+    try {
+      await bidSentryApi.cancelGeneration(preview.taskId)
+    } catch (reason) {
+      setError(userMessage(reason))
+    }
+  }
+  const selectedPlan = preview?.plans.find((plan) => plan.candidateId === candidateId) ?? null
   return (
     <div className="page-stack generation-page">
       <section className="panel">
@@ -197,21 +216,37 @@ export function GenerationPage(): React.JSX.Element {
                   type="radio"
                   name="candidate"
                   checked={candidate.candidateId === candidateId}
-                  onChange={() => setCandidateId(candidate.candidateId)}
+                  onChange={() => {
+                    setCandidateId(candidate.candidateId)
+                    setPlanConfirmed(false)
+                  }}
                 />
                 <span>
                   <strong>{candidate.title}</strong>
                   <small>
-                    {candidate.sourceType} · 置信度 {Math.round(candidate.confidence * 100)}% ·{' '}
-                    {candidate.reasons.join('；')}
+                    {candidate.sourceType} · 置信度 {Math.round(candidate.confidence * 100)}% · 范围{' '}
+                    {candidate.startNodeId} → {candidate.endNodeId} ·{' '}
+                    {candidate.startPage
+                      ? `页码 ${candidate.startPage}${candidate.endPage && candidate.endPage !== candidate.startPage ? `–${candidate.endPage}` : ''} · `
+                      : ''}
+                    {candidate.sectionOutline.length
+                      ? `章节：${candidate.sectionOutline.join(' / ')}`
+                      : '未提取章节层级'}
+                    · {candidate.reasons.join('；')}
                   </small>
+                  {candidate.previewText ? <small>范围预览：{candidate.previewText}</small> : null}
                 </span>
               </label>
             ))}
           </div>
           <div className="fill-actions">
-            <strong>将执行的动作：{preview.actions.length} 项</strong>
-            {preview.actions.map((action) => (
+            <strong>将执行的动作：{selectedPlan?.actions.length ?? 0} 项</strong>
+            {selectedPlan?.warnings.map((warning) => (
+              <div className="notice warning" key={warning}>
+                <span>{warning}</span>
+              </div>
+            ))}
+            {selectedPlan?.actions.map((action) => (
               <div key={action.fieldId}>
                 <span>{action.label}</span>
                 <small>
@@ -222,15 +257,66 @@ export function GenerationPage(): React.JSX.Element {
                 </small>
               </div>
             ))}
+            {selectedPlan?.unknownRequired ? (
+              <div className="notice danger">
+                <strong>有 {selectedPlan.unknownRequired} 项必填内容尚未识别</strong>
+                <span>请补充模板中的待填写字段后重新选择文件，程序不会猜测或错填这些值。</span>
+                {selectedPlan.unknownFields.map((field) => (
+                  <small key={field.nodeId}>
+                    {field.nodeId}：{field.text}
+                  </small>
+                ))}
+                {selectedPlan.unresolvedFields.map((field) => (
+                  <small key={field.field}>{field.label}：未找到明确字段位置</small>
+                ))}
+              </div>
+            ) : null}
+            {selectedPlan &&
+            selectedPlan.unresolvedFields.length > 0 &&
+            !selectedPlan.unknownRequired ? (
+              <div className="notice warning">
+                <strong>有 {selectedPlan.unresolvedFields.length} 项表单值未找到明确字段</strong>
+                <span>这些值不会写入相似位置，请确认模板是否需要后再人工补充。</span>
+                {selectedPlan.unresolvedFields.map((field) => (
+                  <small key={field.field}>{field.label}：未填充</small>
+                ))}
+              </div>
+            ) : null}
           </div>
-          <button
-            className="button primary"
-            type="button"
-            onClick={() => void generate()}
-            disabled={busy || !output || !candidateId}
-          >
-            {busy ? '正在生成并验证…' : '确认并生成 DOCX 草稿'}
-          </button>
+          <label className="review-consent">
+            <input
+              type="checkbox"
+              checked={planConfirmed}
+              onChange={(event) => setPlanConfirmed(event.currentTarget.checked)}
+              disabled={busy || !selectedPlan || selectedPlan.unknownRequired > 0}
+            />
+            <span>
+              <strong>我已确认模板范围和填充计划</strong>
+              <small>固定值来自招标证据，未知项不会猜测；生成 DOCX 后仍需人工复核。</small>
+            </span>
+          </label>
+          <div className="button-group">
+            <button
+              className="button primary"
+              type="button"
+              onClick={() => void generate()}
+              disabled={
+                busy ||
+                !output ||
+                !candidateId ||
+                !selectedPlan ||
+                !planConfirmed ||
+                selectedPlan.unknownRequired > 0
+              }
+            >
+              {busy ? '正在生成并验证…' : '确认并生成 DOCX 草稿'}
+            </button>
+            {busy && preview ? (
+              <button className="button secondary" type="button" onClick={() => void cancel()}>
+                取消生成
+              </button>
+            ) : null}
+          </div>
         </section>
       ) : null}
       {result ? (
@@ -242,6 +328,18 @@ export function GenerationPage(): React.JSX.Element {
           <p>
             输出：{result.outputName} · 报告：{result.reportName}
           </p>
+          <div className="button-group">
+            {result.files.map((file) => (
+              <button
+                className="button secondary"
+                type="button"
+                key={file.fileId}
+                onClick={() => void bidSentryApi.showResultInFolder(file.fileId)}
+              >
+                在文件夹中显示{file.displayName}
+              </button>
+            ))}
+          </div>
           {result.warnings.map((warning) => (
             <p className="inline-hint" key={warning}>
               {warning}

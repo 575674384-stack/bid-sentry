@@ -1,6 +1,9 @@
 {
   "schemaVersion": "aegis.schema.v0",
   "baselineRefs": [
+    "docs/aegis/specs/2026-08-09-bid-sentry-design.md",
+    "docs/aegis/adr/ADR-0001-verified-document-publication.md",
+    "docs/aegis/adr/ADR-0002-sandboxed-bundled-commonjs-preload.md",
     "docs/aegis/plans/2026-08-10-v1-complete-product.md",
     "AGENTS.md"
   ],
@@ -9,10 +12,17 @@
   "retirementPlan": "aligned",
   "evidenceBundle": [
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-cross-platform-gap.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-electron-e2e-final.json",
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-electron-e2e.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-independent-review-final.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-libreoffice-compatibility.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-linux-package-final.json",
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-linux-package.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-live-ai-compatibility-final.json",
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-live-ai-compatibility.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-local-quality-gate-final.json",
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-local-quality-gate.json",
+    "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-packaged-functional-e2e-final.json",
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-packaged-functional-e2e.json",
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-pdf-text-layer.json",
     "docs/aegis/work/2026-08-10-v1-complete-product/evidence-bundle-draft-updater-boundaries.json"

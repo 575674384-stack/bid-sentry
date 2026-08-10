@@ -5,6 +5,7 @@ import {
   mkdtemp,
   open,
   readFile,
+  readdir,
   realpath,
   rename,
   rm,
@@ -20,6 +21,7 @@ import {
   MAX_INPUT_BYTES,
   TemporaryWorkspace,
   adoptTemporaryWorkspace,
+  attestExactFile,
   assertInputUnchanged,
   assertOutputAvailable,
   buildSanitizedOutputPath,
@@ -32,6 +34,7 @@ import {
   rollbackPublishedFiles,
   sha256File
 } from '../../src/core/documents/fileSafety'
+import { resolvePathIdentityWithoutSymbolicLinks } from '../../src/core/documents/pathSafety'
 import type { VerificationReport } from '../../src/shared/contracts'
 
 const temporaryDirectories: string[] = []
@@ -181,6 +184,68 @@ describe('createInputSnapshot', () => {
 })
 
 describe('immutable input and output boundaries', () => {
+  it('rejects a replaced selected output directory before creating a workspace', async () => {
+    const directory = await createTemporaryDirectory()
+    const outputDirectory = join(directory, 'output')
+    const detachedDirectory = join(directory, 'selected-output')
+    await mkdir(outputDirectory)
+    const selectedIdentity = (await resolvePathIdentityWithoutSymbolicLinks(outputDirectory))
+      .identity
+    await rename(outputDirectory, detachedDirectory)
+    await mkdir(outputDirectory)
+
+    await expect(createTemporaryWorkspace(outputDirectory, selectedIdentity)).rejects.toMatchObject(
+      { appError: { code: 'FILE_CHANGED' } }
+    )
+    expect(
+      (await readdir(outputDirectory)).filter((name) => name.startsWith('.bid-sentry-tmp-'))
+    ).toEqual([])
+  })
+
+  it('detects an identity replacement after hashing attestable bytes', async () => {
+    const directory = await createTemporaryDirectory()
+    const outputPath = join(directory, 'report.json')
+    const replacementPath = join(directory, 'replacement.json')
+    await writeFile(outputPath, '{"ok":true}\n', 'utf8')
+    await writeFile(replacementPath, '{"ok":true}\n', 'utf8')
+    const expectedIdentity = (await resolvePathIdentityWithoutSymbolicLinks(outputPath)).identity
+    const expectedSha256 = await sha256File(outputPath)
+
+    await expect(
+      attestExactFile({
+        absolutePath: outputPath,
+        expectedIdentity,
+        expectedSha256,
+        afterHash: async () => {
+          await unlink(outputPath)
+          await rename(replacementPath, outputPath)
+        }
+      })
+    ).rejects.toMatchObject({ appError: { code: 'INTERNAL_ERROR' } })
+  })
+
+  it('detects same-inode content mutation after hashing attestable bytes', async () => {
+    const directory = await createTemporaryDirectory()
+    const outputPath = join(directory, 'report.json')
+    await writeFile(outputPath, '{"ok":true}\n', 'utf8')
+    const expectedIdentity = (await resolvePathIdentityWithoutSymbolicLinks(outputPath)).identity
+    const expectedSha256 = await sha256File(outputPath)
+
+    await expect(
+      attestExactFile({
+        absolutePath: outputPath,
+        expectedIdentity,
+        expectedSha256,
+        afterHash: async () => {
+          await writeFile(outputPath, '{"ok":false}\n', 'utf8')
+        }
+      })
+    ).rejects.toMatchObject({ appError: { code: 'INTERNAL_ERROR' } })
+    expect((await resolvePathIdentityWithoutSymbolicLinks(outputPath)).identity).toEqual(
+      expectedIdentity
+    )
+  })
+
   it('normalizes Windows path identity case-insensitively', () => {
     expect(normalizeFileIdentity('C:\\Bid\\FILE.docx', 'win32')).toBe(
       normalizeFileIdentity('c:\\bid\\file.DOCX', 'win32')

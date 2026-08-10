@@ -48,6 +48,18 @@ export function UpdateStatus(): React.JSX.Element {
     }
   }
 
+  const openRelease = async (): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      await bidSentryApi.openReleasePage()
+    } catch (reason) {
+      setError(userMessage(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="aside-card update-card" aria-live="polite">
       <div className="update-card-heading">
@@ -61,7 +73,27 @@ export function UpdateStatus(): React.JSX.Element {
       {status?.latestVersion ? (
         <p className="update-version">最新版本：{status.latestVersion}</p>
       ) : null}
+      {status?.releasePublishedAt ? (
+        <p className="update-version">
+          发布时间：{new Date(status.releasePublishedAt).toLocaleString()}
+        </p>
+      ) : null}
+      {status?.packageType ? (
+        <p className="update-version">
+          安装包：{status.packageType === 'manual-only' ? '需手动下载' : status.packageType}
+        </p>
+      ) : null}
+      {status?.signatureStatus === 'unsigned' ? (
+        <p className="update-warning" role="note">
+          当前发布包未签名；下载前请核对官方 Release 校验和，安装前请确认来源。
+        </p>
+      ) : null}
       {status?.message ? <p className="update-message">{status.message}</p> : null}
+      {status?.releaseNotes ? (
+        <pre className="update-notes" aria-label="更新说明">
+          {status.releaseNotes}
+        </pre>
+      ) : null}
       {error ? <p className="update-error">{error}</p> : null}
       <div className="update-actions">
         <button
@@ -92,6 +124,14 @@ export function UpdateStatus(): React.JSX.Element {
             打开安装程序
           </button>
         ) : null}
+        <button
+          className="button secondary"
+          type="button"
+          onClick={() => void openRelease()}
+          disabled={busy}
+        >
+          打开官方 Release
+        </button>
       </div>
     </div>
   )

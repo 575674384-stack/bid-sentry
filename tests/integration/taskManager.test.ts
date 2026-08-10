@@ -1,5 +1,15 @@
 import { EventEmitter } from 'node:events'
-import { access, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises'
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  unlink,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +19,7 @@ import {
   type ManagedWorkerProcess,
   type TaskManagerOptions
 } from '../../src/main/tasks/taskManager'
+import { resolvePathIdentityWithoutSymbolicLinks } from '../../src/core/documents/pathSafety'
 import type {
   TaskExecutionRequest,
   TaskProgress,
@@ -265,6 +276,28 @@ describe('TaskManager', () => {
 
     expect(worker.messages.some((message) => message.type === 'execute')).toBe(false)
     expect(cleaned).toEqual([join(outputDirectory, '.bid-sentry-tmp-test')])
+  })
+
+  it('passes the selected identity to the default workspace creator before creating files', async () => {
+    const outputDirectory = await createTemporaryDirectory()
+    const selectedIdentity = (await resolvePathIdentityWithoutSymbolicLinks(outputDirectory))
+      .identity
+    const detachedDirectory = `${outputDirectory}-selected`
+    temporaryDirectories.push(detachedDirectory)
+    await rename(outputDirectory, detachedDirectory)
+    await mkdir(outputDirectory)
+    const worker = new FakeWorker()
+    const manager = new TaskManager(() => worker)
+    await resolvePreview(manager, worker)
+
+    await expect(
+      manager.execute(executeRequest(outputDirectory), selectedIdentity)
+    ).rejects.toMatchObject({ appError: { code: 'FILE_CHANGED' } })
+
+    expect(worker.messages.some((message) => message.type === 'execute')).toBe(false)
+    expect(
+      (await readdir(outputDirectory)).filter((name) => name.startsWith('.bid-sentry-tmp-'))
+    ).toEqual([])
   })
 
   it('rejects instead of publishing completed when final result paths are inconsistent', async () => {

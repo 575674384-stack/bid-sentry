@@ -28,7 +28,10 @@ test('executes sanitization, review, and qualification generation in the package
   const inputs = await Promise.all(
     [1, 2].map(async (index) => {
       const path = join(fixtures, `packaged-bid-${index}.docx`)
-      await writeDocxFixture(path)
+      await writeDocxFixture(path, {
+        qualificationTemplate: true,
+        externalDocumentRelationship: false
+      })
       return path
     })
   )
@@ -107,6 +110,8 @@ async function runGeneration(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: '确认模板和填充动作' })).toBeVisible({
     timeout: 30_000
   })
+  await page.locator('.candidate-card').first().click()
+  await page.getByRole('checkbox', { name: /我已确认模板范围和填充计划/ }).check()
   await page.getByRole('button', { name: '确认并生成 DOCX 草稿' }).click()
   await expect(page.getByRole('heading', { name: '资格标草稿已生成' })).toBeVisible({
     timeout: 30_000

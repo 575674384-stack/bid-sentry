@@ -18,9 +18,12 @@ export const UpdateStatusSchema = z
     currentVersion: z.string().trim().min(1).max(100),
     latestVersion: z.string().trim().min(1).max(100).optional(),
     releaseNotes: z.string().max(20_000).optional(),
+    releasePublishedAt: z.string().datetime({ offset: true }).optional(),
     releaseUrl: z.string().url().max(2_048).optional(),
     assetName: z.string().trim().min(1).max(255).optional(),
     downloadedPathId: z.string().uuid().optional(),
+    packageType: z.enum(['appimage', 'nsis', 'manual-only']).optional(),
+    signatureStatus: z.enum(['unsigned', 'signed', 'unknown']).optional(),
     message: z.string().trim().min(1).max(500).optional()
   })
   .strict()

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "electron-e2e-final",
+  "type": "command",
+  "source": "xvfb-run -a pnpm test:e2e",
+  "summary": "Latest serial run passed: 6 Electron E2E tests passed and 2 package-path tests skipped by design.",
+  "verifier": "coordinator main-worktree verification 2026-08-10"
+}

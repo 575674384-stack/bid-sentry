@@ -36,6 +36,27 @@ export const AppErrorSchema = z
 export type AppErrorCode = z.infer<typeof AppErrorCodeSchema>
 export type AppError = z.infer<typeof AppErrorSchema>
 
+/**
+ * Attach a stable, privacy-safe diagnostic coordinate at a process boundary.
+ * This helper never copies exception text, paths or document data into the
+ * public error contract.
+ */
+export function withDiagnostic(
+  error: AppError,
+  stage: z.infer<typeof DiagnosticStageSchema>
+): AppError {
+  if (error.code === 'TASK_CANCELLED') return error
+  return createAppError(error.code, {
+    retryable: error.retryable,
+    detailId: error.detailId ?? diagnosticUuid(),
+    stage: error.stage ?? stage
+  })
+}
+
+function diagnosticUuid(): string {
+  return globalThis.crypto?.randomUUID?.() ?? '00000000-0000-4000-8000-000000000000'
+}
+
 const SAFE_MESSAGES: Readonly<Record<AppErrorCode, string>> = Object.freeze({
   UNSUPPORTED_TYPE: '该文件类型暂不受支持。',
   TEXT_LAYER_REQUIRED: '该 PDF 没有可读取的文本层；当前版本暂不支持 OCR。',

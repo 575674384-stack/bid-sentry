@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "packaged-functional-e2e-final",
+  "type": "command",
+  "source": "pnpm package:e2e:linux; packaged functional E2E",
+  "summary": "Latest dedicated E2E package executed sanitization, bid review, and qualification generation; passed.",
+  "verifier": "coordinator main-worktree verification 2026-08-10"
+}

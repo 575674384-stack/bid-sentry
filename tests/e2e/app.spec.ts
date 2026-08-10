@@ -177,7 +177,7 @@ test('runs the deterministic bid review workflow and writes an evidence report',
 })
 
 test('generates a qualification DOCX from a confirmed template candidate', async () => {
-  const application = await launchTestApplication({ inputCount: 1 })
+  const application = await launchTestApplication({ inputCount: 1, qualificationTemplate: true })
   try {
     await application.page.getByRole('button', { name: /资格标预制作/ }).click()
     await application.page.getByRole('button', { name: '选择招标文件' }).click()
@@ -190,6 +190,8 @@ test('generates a qualification DOCX from a confirmed template candidate', async
     await expect(application.page.getByRole('heading', { name: '确认模板和填充动作' })).toBeVisible(
       { timeout: 30_000 }
     )
+    await application.page.locator('.candidate-card').first().click()
+    await application.page.getByRole('checkbox', { name: /我已确认模板范围和填充计划/ }).check()
     await application.page.getByRole('button', { name: '确认并生成 DOCX 草稿' }).click()
     await expect(application.page.getByRole('heading', { name: '资格标草稿已生成' })).toBeVisible({
       timeout: 30_000
@@ -286,6 +288,7 @@ test('launches the packaged production app without test harness', async () => {
 async function launchTestApplication(options: {
   inputCount: number
   executeDelayMs?: number
+  qualificationTemplate?: boolean
 }): Promise<TestApplication> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'bid-sentry-e2e-')))
   const fixturesDirectory = join(root, 'fixtures')
@@ -304,7 +307,11 @@ async function launchTestApplication(options: {
         fixturesDirectory,
         `synthetic-bid-${String(index + 1).padStart(2, '0')}.docx`
       )
-      await writeDocxFixture(inputPath)
+      await writeDocxFixture(inputPath, {
+        ...(options.qualificationTemplate
+          ? { qualificationTemplate: true, externalDocumentRelationship: false }
+          : {})
+      })
       return inputPath
     })
   )

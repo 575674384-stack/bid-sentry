@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "local-quality-gate-final",
+  "type": "command",
+  "source": "pnpm format:check; pnpm lint; pnpm typecheck; pnpm test --run; pnpm test:coverage; pnpm build; git diff --check",
+  "summary": "Latest serial main-worktree run: all passed; 30 test files, 191 passed and 1 skipped; coverage 83.57% statements, 74.65% branches, 87.23% lines.",
+  "verifier": "coordinator main-worktree verification 2026-08-10"
+}

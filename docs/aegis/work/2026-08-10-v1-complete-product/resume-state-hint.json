@@ -2,9 +2,9 @@
   "schemaVersion": "aegis.schema.v0",
   "taskId": "2026-08-10-v1-complete-product",
   "lastCheckpointRef": "docs/aegis/work/2026-08-10-v1-complete-product/todo-checkpoint-draft.json",
-  "resumeInstruction": "Re-read the plan, evidence, checkpoint, AGENTS.md and release workflow before any version bump or Git mutation",
+  "resumeInstruction": "Do not claim Windows or Office compatibility from Linux evidence; preserve the 0.1.0 version until CI evidence is read back.",
   "knownPartialWork": [
-    "Fresh full local gate after updater/release hardening: 153 tests passed, Linux package/audit/startup and packaged three-flow E2E passed"
+    "Fresh local quality gate, Electron E2E, Linux package/audit/startup, packaged functional E2E, live AI compatibility, documentation and independent review"
   ],
   "mustReadBeforeContinuing": [
     "docs/aegis/work/2026-08-10-v1-complete-product/10-intent.md",
@@ -12,6 +12,6 @@
     "docs/aegis/work/2026-08-10-v1-complete-product/todo-checkpoint-draft.json"
   ],
   "unsafeToAssume": [
-    "Do not infer Windows or office-reader compatibility from Linux results"
+    "A successful local Linux package does not prove Windows hard-link, installer, or Word/WPS compatibility."
   ]
 }

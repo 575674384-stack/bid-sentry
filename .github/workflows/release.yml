@@ -50,12 +50,38 @@ jobs:
       - name: Download Linux CI artifact
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download "${{ steps.ci.outputs.run_id }}" --repo "$GITHUB_REPOSITORY" --name bid-sentry-linux-x64 --dir release-assets/linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets/linux
+          gh run download "${{ steps.ci.outputs.run_id }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name bid-sentry-linux-x64 \
+            --dir release-assets/linux
+          downloaded_dir='release-assets/linux/bid-sentry-linux-x64'
+          if [ -d "$downloaded_dir" ]; then
+            find "$downloaded_dir" -mindepth 1 -maxdepth 1 -type f -exec mv -t release-assets/linux -- {} +
+            rmdir "$downloaded_dir"
+          fi
+          test -f release-assets/linux/SHA256SUMS
 
       - name: Download Windows CI artifact
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download "${{ steps.ci.outputs.run_id }}" --repo "$GITHUB_REPOSITORY" --name bid-sentry-windows-x64 --dir release-assets/windows
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets/windows
+          gh run download "${{ steps.ci.outputs.run_id }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name bid-sentry-windows-x64 \
+            --dir release-assets/windows
+          downloaded_dir='release-assets/windows/bid-sentry-windows-x64'
+          if [ -d "$downloaded_dir" ]; then
+            find "$downloaded_dir" -mindepth 1 -maxdepth 1 -type f -exec mv -t release-assets/windows -- {} +
+            rmdir "$downloaded_dir"
+          fi
+          test -f release-assets/windows/SHA256SUMS
 
       - name: Verify asset set, checksums, and metadata
         shell: bash
@@ -162,13 +188,70 @@ jobs:
           OCR 暂不支持；扫描 PDF 的审查/预制作需要可靠文本层；生成 DOCX 和 AI finding 都需要人工复核。发布包未做代码签名，请核对 `SHA256SUMS`。
           EOF
           if gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | while IFS= read -r name; do
-              if ! grep -Fxq "$name" release-assets/expected-assets.txt; then
-                gh release delete-asset v1.0.0 "$name" --repo "$GITHUB_REPOSITORY" --yes
-              fi
+            # A published release is immutable for this workflow. A draft may
+            # be resumed only when every existing asset is an exact byte match
+            # for this build. Partial uploads are valid and are completed below;
+            # unexpected assets, stale metadata, or mismatched bytes stop here.
+            release_json="$(gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,title,body,assets)"
+            test "$(jq -r '.isDraft' <<<"$release_json")" = "true"
+            test "$(jq -r '.isPrerelease' <<<"$release_json")" = "false"
+            if [[ "$(jq -r '.title' <<<"$release_json")" != 'Bid Sentry v1.0.0' || "$(jq -r '.body' <<<"$release_json")" != "$(cat "$notes")" ]]; then
+              gh release edit v1.0.0 --repo "$GITHUB_REPOSITORY" --draft --title 'Bid Sentry v1.0.0' --notes-file "$notes"
+              release_json="$(gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,title,body,assets)"
+            fi
+            rm -rf existing-release
+            mkdir -p existing-release
+            mapfile -t draft_asset_names < <(jq -r '.assets[]?.name' <<<"$release_json")
+            for asset_name in "${draft_asset_names[@]}"; do
+              gh release download v1.0.0 \
+                --repo "$GITHUB_REPOSITORY" \
+                --pattern "$asset_name" \
+                --dir existing-release
             done
-            gh release upload v1.0.0 --repo "$GITHUB_REPOSITORY" release-assets/final/* --clobber
+          node - <<'NODE'
+            const { readFileSync, readdirSync } = require('node:fs')
+            const { createHash } = require('node:crypto')
+            const expected = JSON.parse(readFileSync('release-assets/final/release-manifest.json', 'utf8'))
+            const expectedFiles = new Set(readFileSync('release-assets/expected-assets.txt', 'utf8').trim().split(/\r?\n/u))
+            const expectedBytes = new Map(Object.entries(expected.assets))
+            for (const name of readdirSync('existing-release')) {
+              if (!expectedFiles.has(name)) throw new Error(`Unexpected existing draft asset: ${name}`)
+              if (name === 'release-manifest.json') {
+                const actual = JSON.parse(readFileSync(`existing-release/${name}`, 'utf8'))
+                if (actual.schemaVersion !== 1 || actual.tag !== expected.tag || actual.commit !== expected.commit || JSON.stringify(actual.assets) !== JSON.stringify(expected.assets)) {
+                  throw new Error('Existing draft release manifest does not match this immutable commit.')
+                }
+                continue
+              }
+              if (name === 'SHA256SUMS') continue
+              const expectedHash = expectedBytes.get(name)
+              if (typeof expectedHash !== 'string') throw new Error(`Missing expected hash: ${name}`)
+              const path = `existing-release/${name}`
+              const actualHash = createHash('sha256').update(readFileSync(path)).digest('hex')
+              if (actualHash !== expectedHash) {
+                throw new Error(`Existing draft asset bytes/hash differ: ${name}`)
+              }
+            }
+          NODE
+            if [[ -f existing-release/SHA256SUMS ]]; then cmp -s existing-release/SHA256SUMS release-assets/final/SHA256SUMS; fi
+            mapfile -t existing_names < <(jq -r '.assets[]?.name' <<<"$release_json" | sort)
+            missing_assets=()
+            while IFS= read -r name; do
+              if printf '%s\n' "${existing_names[@]}" | grep -Fxq "$name"; then
+                continue
+              fi
+              test -f "release-assets/final/$name"
+              missing_assets+=("release-assets/final/$name")
+            done < release-assets/expected-assets.txt
+            if ((${#missing_assets[@]} > 0)); then
+              # Existing bytes were verified above; only add missing names.
+              gh release upload v1.0.0 --repo "$GITHUB_REPOSITORY" "${missing_assets[@]}"
+            fi
           else
-            gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --verify-tag --title 'Bid Sentry v1.0.0' --notes-file "$notes" release-assets/final/*
+            gh release create v1.0.0 --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title 'Bid Sentry v1.0.0' --notes-file "$notes"
+            mapfile -t upload_names < <(find release-assets/final -maxdepth 1 -type f ! -name 'release-manifest.json' -printf '%p\n' | sort)
+            gh release upload v1.0.0 --repo "$GITHUB_REPOSITORY" "${upload_names[@]}"
+            gh release upload v1.0.0 --repo "$GITHUB_REPOSITORY" release-assets/final/release-manifest.json
           fi
           diff -u release-assets/expected-assets.txt <(gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
+          gh release edit v1.0.0 --repo "$GITHUB_REPOSITORY" --draft=false
