@@ -8,30 +8,36 @@ import {
 } from '../../shared/contracts'
 import type { DocumentSnapshot } from '../../shared/contracts'
 import { DocumentSafetyError } from '../documents/fileSafety'
-import { applyFieldAction, literalLabelPattern } from './docx'
+import { applyFieldAction } from './docx'
+import { knownLabelPattern, literalLabelPattern, KNOWN_LABEL_SYNONYMS } from './labels'
 import { extractFacts, normalize, type ReviewEntity } from '../review/entities'
 
-const FORM_FIELD_LABELS: Record<KnownFormField, string> = {
-  bidderName: '投标人(?:名称)?|投标单位(?:名称)?|bidder\\s+name',
-  unifiedSocialCreditCode: '统一社会信用代码',
-  address: '地址',
-  legalRepresentative: '法定代表人',
-  authorizedRepresentative: '授权代表',
-  contact: '联系人',
-  phone: '电话|手机',
-  email: '邮箱|电子邮件',
-  projectName: '项目名称',
-  sectionName: '标段(?:名称)?',
-  compilationDate: '编制日期'
-}
+// Whitespace-tolerant, synonym-rich label patterns shared with the OOXML
+// writer (src/core/generation/labels.ts is the single source of truth).
+const FORM_FIELD_LABELS: Record<KnownFormField, string> = Object.fromEntries(
+  [
+    'bidderName',
+    'unifiedSocialCreditCode',
+    'address',
+    'legalRepresentative',
+    'authorizedRepresentative',
+    'contact',
+    'phone',
+    'email',
+    'projectName',
+    'sectionName',
+    'compilationDate'
+  ].map((field) => [field, knownLabelPattern(field) as string])
+) as Record<KnownFormField, string>
 
 type KnownFormField = Exclude<keyof GenerationUserForm, 'extraFields'>
 
-const FIXED_VALUE_LABELS: Record<FixedValueKind, string> = {
-  duration: '工期|服务期|交货期|合同期限',
-  qualityStandard: '质量标准|质量要求|验收标准',
-  projectNumber: '项目编号|招标编号|标段编号|项目代码'
-}
+const FIXED_VALUE_LABELS: Record<FixedValueKind, string> = Object.fromEntries(
+  ['duration', 'qualityStandard', 'projectNumber'].map((field) => [
+    field,
+    knownLabelPattern(field) as string
+  ])
+) as Record<FixedValueKind, string>
 
 /**
  * Labels that deterministic code already owns: the eleven well-known form
@@ -129,7 +135,7 @@ export function createFillPlan(
     if (!value) continue
     const explicitTarget = fieldNodes.find((node) => hasExplicitFormSlot(node, field))
     if (!explicitTarget) {
-      unresolvedFields.push({ field, label: fieldLabel(field) })
+      unresolvedFields.push({ field, label: displayFieldLabel(field) })
       continue
     }
     const target = adjacentCellValueTarget(fieldNodes, explicitTarget) ?? explicitTarget
@@ -222,12 +228,12 @@ export function createFillPlan(
         .reduce((text, action) => applyFieldAction(text, action), node.text)
     )
   )
-  // Only the required bidder identity blocks generation when its confirmed
-  // value has no explicit target. Optional form values may legitimately be
-  // absent from a particular qualification template; report them without
-  // guessing a similar field or blocking the otherwise safe draft.
-  const unknownRequired =
-    unknownFields.length + unresolvedFields.filter(({ field }) => field === 'bidderName').length
+  // Real qualification templates are full of blanks the bidder completes by
+  // hand (签字、盖章、日期、证照编号…). Those stay visible in the plan as
+  // 待人工填写 items and never block generation. The only hard blocker is the
+  // required bidder identity having no explicit slot — filling it into a
+  // guessed position would be a wrong-value defect, not a draft gap.
+  const unknownRequired = unresolvedFields.filter(({ field }) => field === 'bidderName').length
   const planWithoutDigest = {
     schemaVersion: 1,
     planId: cryptoRandomUuid(),
@@ -289,6 +295,11 @@ function selectedNodes(document: DocumentSnapshot, candidate: TemplateCandidate)
 
 function fieldLabel(field: KnownFormField): string {
   return FORM_FIELD_LABELS[field] ?? field
+}
+
+/** User-facing label for a known field (regex sources must never reach UI). */
+function displayFieldLabel(field: KnownFormField): string {
+  return KNOWN_LABEL_SYNONYMS[field]?.[0] ?? field
 }
 
 function hasExplicitFormSlot(

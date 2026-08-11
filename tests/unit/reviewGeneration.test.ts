@@ -218,7 +218,7 @@ describe('review and generation domain rules', () => {
     expect(plan.actions).toEqual([
       expect.objectContaining({ label: 'bidderName', targetNodeId: 'p-0', value: '示例单位' })
     ])
-    expect(plan.unresolvedFields).toEqual([{ field: 'address', label: '地址' }])
+    expect(plan.unresolvedFields).toEqual([{ field: 'address', label: '注册地址' }])
     expect(plan.unknownRequired).toBe(0)
     expect(plan.warnings.join('；')).toContain('阻止猜测填充')
   })
@@ -330,7 +330,9 @@ describe('review and generation domain rules', () => {
         extraFields: []
       }
     )
-    expect(plan.unknownRequired).toBe(1)
+    // Leftover blanks (here the 工期 slot) are reported for manual completion
+    // but no longer block generation; only a missing bidder-name slot blocks.
+    expect(plan.unknownRequired).toBe(0)
     expect(plan.unknownFields).toContainEqual(expect.objectContaining({ nodeId: 'p-0' }))
   })
 

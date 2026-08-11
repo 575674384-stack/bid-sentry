@@ -439,22 +439,17 @@ function PlanStep({ flow }: { flow: GenerationFlow }): React.JSX.Element | null 
           <Alert
             type="error"
             showIcon
-            title={`有 ${plan.unknownRequired} 项必填内容尚未识别`}
-            description={
-              <>
-                <ul style={{ margin: 0, paddingInlineStart: 18 }}>
-                  {plan.unknownFields.map((field) => (
-                    <li key={field.nodeId}>
-                      {field.nodeId}：{field.text}
-                    </li>
-                  ))}
-                  {plan.unresolvedFields.map((field) => (
-                    <li key={field.field}>{field.label}：未找到明确字段位置</li>
-                  ))}
-                </ul>
-                请补充信息或调整模板后重新生成计划，程序不会猜测或错填这些值。
-              </>
-            }
+            title="投标单位名称在模板中没有找到明确字段"
+            description="请回到上一步确认已填写投标单位名称；若模板确实没有该字段，请在招标文件中补充后再分析。程序不会猜测填充位置。"
+          />
+        ) : null}
+
+        {!blocked && plan.unknownFields.length > 0 ? (
+          <Alert
+            type="info"
+            showIcon
+            title={`模板中还有 ${plan.unknownFields.length} 处空白需要生成后人工填写`}
+            description="签字、盖章、日期、证照编号等空白会原样保留在草稿中，请逐项补全并复核。"
           />
         ) : null}
 

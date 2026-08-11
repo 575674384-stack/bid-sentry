@@ -27,6 +27,9 @@ async function readDocxSnapshot(filePath: string, signal?: AbortSignal): Promise
   inspectDocxArchive(archive)
   const main = archive.entries.find((entry) => entry.name === 'word/document.xml')
   if (!main) throw new DocumentSafetyError('INVALID_DOCUMENT')
+  const styleLevels = readStyleOutlineLevels(
+    archive.entries.find((entry) => entry.name === 'word/styles.xml')?.contents
+  )
   const document = parseStrictXml(main.contents)
   const nodes: Array<ReturnType<typeof makeNode>> = []
   let paragraphIndex = 0
@@ -40,7 +43,7 @@ async function readDocxSnapshot(filePath: string, signal?: AbortSignal): Promise
     if (child.nodeType !== 1) continue
     const element = child as typeof body
     if (element.localName === 'p') {
-      appendParagraphNode(element, nodes, () => paragraphIndex++)
+      appendParagraphNode(element, nodes, () => paragraphIndex++, styleLevels)
       continue
     }
     if (element.localName === 'sdt') {
@@ -50,7 +53,7 @@ async function readDocxSnapshot(filePath: string, signal?: AbortSignal): Promise
           if (contentChild.nodeType !== 1) continue
           const contentElement = contentChild as Element
           if (contentElement.localName === 'p') {
-            appendParagraphNode(contentElement, nodes, () => paragraphIndex++)
+            appendParagraphNode(contentElement, nodes, () => paragraphIndex++, styleLevels)
           } else if (contentElement.localName === 'tbl') {
             appendTableNodes(contentElement, nodes, tableIndex)
             tableIndex += 1
@@ -83,12 +86,103 @@ async function readDocxSnapshot(filePath: string, signal?: AbortSignal): Promise
     }
   }
   if (!nodes.length) throw new DocumentSafetyError('INVALID_DOCUMENT')
+  // Demote style-derived "headings" whose text is empty or paragraph-length:
+  // converted documents often tag body paragraphs with an outline level, and
+  // those pseudo headings would corrupt every section boundary downstream.
+  for (const [index, node] of nodes.entries()) {
+    if (node.kind !== 'heading') continue
+    const length = node.text.trim().length
+    if (length < 2 || length > 60) {
+      nodes[index] = makeNode('paragraph', node.nodeId, node.text, node.anchor.label)
+    }
+  }
+  // Real-world tender files often carry no heading styles at all: every
+  // paragraph is manually formatted. Without any outline there is no safe
+  // structural boundary for template extraction, so fall back to a strict
+  // numbered/short-title heuristic.
+  if (!nodes.some((node) => node.kind === 'heading')) {
+    for (const [index, node] of nodes.entries()) {
+      if (node.kind !== 'paragraph') continue
+      const level = heuristicHeadingLevel(node.text)
+      if (level === undefined) continue
+      nodes[index] = makeNode('heading', node.nodeId, node.text, node.anchor.label, { level })
+    }
+  }
   return snapshot({
     documentType: 'docx',
     displayName: filePath.split(/[\\/]/u).pop() ?? 'document.docx',
     nodes,
     hasTextLayer: true
   })
+}
+
+/**
+ * Map styleId → outline level from styles.xml. Word and WPS localise built-in
+ * heading styles differently (styleId "1", "a3", …), so the level must come
+ * from the style definition (w:name / w:outlineLvl), never from the styleId.
+ */
+function readStyleOutlineLevels(stylesContents: Buffer | undefined): ReadonlyMap<string, number> {
+  const levels = new Map<string, number>()
+  if (!stylesContents) return levels
+  let styles: ReturnType<typeof parseStrictXml>
+  try {
+    styles = parseStrictXml(stylesContents)
+  } catch {
+    return levels
+  }
+  for (const style of Array.from(styles.getElementsByTagNameNS(WORD_NS, 'style'))) {
+    const element = style as Element
+    const styleId = element.getAttributeNS(WORD_NS, 'styleId')
+    if (!styleId) continue
+    const name = Array.from(element.getElementsByTagNameNS(WORD_NS, 'name'))[0] as
+      Element | undefined
+    const nameValue = name?.getAttributeNS(WORD_NS, 'val')?.trim() ?? ''
+    const outline = Array.from(element.getElementsByTagNameNS(WORD_NS, 'outlineLvl'))[0] as
+      Element | undefined
+    const outlineValue = outline?.getAttributeNS(WORD_NS, 'val')
+    const named = /^(?:heading|标题)\s*([1-9])$/iu.exec(nameValue)
+    if (named) {
+      levels.set(styleId, Math.min(9, Number(named[1])))
+      continue
+    }
+    if (/^(?:title|标题)$/iu.test(nameValue)) {
+      levels.set(styleId, 1)
+      continue
+    }
+    if (outlineValue !== undefined && outlineValue !== null && outlineValue !== '') {
+      const parsed = Number(outlineValue)
+      if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 8) {
+        levels.set(styleId, parsed + 1)
+      }
+    }
+  }
+  return levels
+}
+
+/**
+ * Conservative fallback when a DOCX carries no heading styles: only short
+ * lines with an explicit structural prefix or a well-known tender-section
+ * suffix become pseudo headings. Depth comes from the numbering pattern.
+ */
+function heuristicHeadingLevel(text: string): number | undefined {
+  const value = text.trim()
+  if (value.length < 2 || value.length > 60) return undefined
+  const numbered =
+    /^(?:第\s*[0-9一二三四五六七八九十百]+\s*[章节部分篇]|[一二三四五六七八九十]+[、.．]|\d+(?:\.\d+){0,5}[、.．\s])/u.exec(
+      value
+    )
+  if (numbered) {
+    const prefix = numbered[0] ?? ''
+    return Math.min(9, Math.max(1, (prefix.match(/\./gu)?.length ?? 0) + 1))
+  }
+  if (
+    /(?:投标文件格式|资格审查|资格标|投标文件组成|附件格式|投标人须知|评标办法|合同条款|技术要求)$/u.test(
+      value
+    )
+  ) {
+    return 1
+  }
+  return undefined
 }
 
 function appendParagraphNode(
@@ -100,7 +194,8 @@ function appendParagraphNode(
     getAttributeNS(namespace: string, localName: string): string | null
   },
   nodes: Array<ReturnType<typeof makeNode>>,
-  nextIndex: () => number
+  nextIndex: () => number,
+  styleLevels: ReadonlyMap<string, number>
 ): void {
   const text = extractWText(paragraph)
   const style = paragraph.getElementsByTagNameNS(
@@ -111,13 +206,50 @@ function appendParagraphNode(
     style as
       { getAttributeNS?: (namespace: string, localName: string) => string | null } | undefined
   )?.getAttributeNS?.('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'val')
-  const levelMatch = /(?:heading|title)(\d+)/iu.exec(styleName ?? '')
+  const level = paragraphOutlineLevel(paragraph) ?? styleLevel(styleName, styleLevels)
   const index = nextIndex()
   nodes.push(
-    makeNode(levelMatch ? 'heading' : 'paragraph', `p-${index}`, text, `段落 ${index + 1}`, {
-      ...(levelMatch ? { level: Number(levelMatch[1]) } : {})
-    })
+    makeNode(
+      level !== undefined ? 'heading' : 'paragraph',
+      `p-${index}`,
+      text,
+      `段落 ${index + 1}`,
+      {
+        ...(level !== undefined ? { level } : {})
+      }
+    )
   )
+}
+
+/** Direct paragraph outline level beats any style-derived level. */
+function paragraphOutlineLevel(paragraph: {
+  getElementsByTagNameNS(namespace: string, localName: string): ArrayLike<unknown>
+}): number | undefined {
+  const outline = Array.from(
+    paragraph.getElementsByTagNameNS(
+      'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+      'outlineLvl'
+    )
+  )[0] as { getAttributeNS?: (namespace: string, localName: string) => string | null } | undefined
+  const raw = outline?.getAttributeNS?.(
+    'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+    'val'
+  )
+  if (raw === undefined || raw === null || raw === '') return undefined
+  const parsed = Number(raw)
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 8 ? parsed + 1 : undefined
+}
+
+function styleLevel(
+  styleId: string | null | undefined,
+  styleLevels: ReadonlyMap<string, number>
+): number | undefined {
+  if (!styleId) return undefined
+  const fromStyles = styleLevels.get(styleId)
+  if (fromStyles !== undefined) return fromStyles
+  // Legacy fallback for documents whose styles.xml lacks the style entry.
+  const legacy = /(?:heading|title)(\d+)/iu.exec(styleId)
+  return legacy ? Math.min(9, Number(legacy[1])) : undefined
 }
 
 function appendTableNodes(

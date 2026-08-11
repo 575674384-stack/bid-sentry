@@ -1,15 +1,34 @@
 import { createHash } from 'node:crypto'
-import type { DocumentSnapshot, TemplateCandidate } from '../../shared/contracts'
+import type { DocumentSnapshot, DocumentNode, TemplateCandidate } from '../../shared/contracts'
 
+const TEMPLATE_TITLE_PATTERN =
+  /投标文件格式|招标投标[^，。；\n]{0,12}文件格式|资格(?:预|送|后)?审|资格标|投标文件组成|附件格式|qualification\s+(?:review|template)|tender\s+(?:document\s+)?format/iu
+
+/**
+ * Find user-confirmable qualification template sections. DOCX candidates are
+ * anchored on heading nodes only — keyword hits inside body content or table
+ * cells never define a range. Every hit yields a tight candidate (up to the
+ * next same-or-higher heading); when no such boundary exists or the tight
+ * range is empty, a loose candidate extending to the document end is offered
+ * instead, always labelled so the user reviews the extra coverage.
+ */
 export function findTemplateCandidates(document: DocumentSnapshot): TemplateCandidate[] {
   const candidates: TemplateCandidate[] = []
-  const starts = document.nodes.filter((node) =>
-    /投标文件格式|资格审查|资格标|投标文件组成|附件格式|qualification\s+(?:review|template)|tender\s+(?:document\s+)?format/iu.test(
-      node.text
-    )
+  const seenRanges = new Set<string>()
+  const bodyNodes = document.nodes.filter(
+    (node) => node.kind !== 'header' && node.kind !== 'footer'
+  )
+  // DOCX ranges only start at headings — body/cell keyword hits never define a
+  // structural range. PDF has no reliable outline, so any text-layer node may
+  // start a single-page candidate (the page boundary keeps it contained).
+  const starts = document.nodes.filter(
+    (node) =>
+      (document.documentType === 'pdf' || node.kind === 'heading') &&
+      TEMPLATE_TITLE_PATTERN.test(node.text)
   )
   for (const start of starts) {
     const startIndex = document.nodes.findIndex((node) => node.nodeId === start.nodeId)
+    if (startIndex < 0) continue
     const end = document.nodes
       .slice(startIndex + 1)
       .find(
@@ -20,67 +39,101 @@ export function findTemplateCandidates(document: DocumentSnapshot): TemplateCand
           node.level <= start.level
       )
     // A PDF page is the strongest stable anchor available without OCR/layout
-    // reconstruction.  When no explicit heading boundary exists, stop at the
-    // detected template page instead of silently copying every later page.
-    // DOCX keeps the heading-based section range and therefore preserves a
-    // multi-page template section when Word supplies real outline levels.
-    // A template range must have an explicit, structural boundary.  Extending
-    // an unbounded heading to the end of the tender can disclose unrelated
-    // qualification/material sections, so an ambiguous DOCX is rejected and
-    // the user is asked to choose or fix the source template.
-    if (document.documentType === 'docx' && !end) continue
-    let rangeStart = startIndex
-    let rangeEnd: number
+    // reconstruction, so PDF candidates always stay within the hit page.
     if (document.documentType === 'pdf') {
       const page = start.anchor.page
       if (page === undefined) continue
-      rangeStart = document.nodes.findIndex((node) => node.anchor.page === page)
-      rangeEnd = document.nodes.reduce(
+      const rangeStart = document.nodes.findIndex((node) => node.anchor.page === page)
+      const rangeEnd = document.nodes.reduce(
         (last, node, index) => (node.anchor.page === page ? index : last),
         rangeStart
       )
-    } else {
-      rangeEnd = Math.max(
-        startIndex,
-        document.nodes.findIndex((node) => node.nodeId === end!.nodeId) - 1
-      )
+      pushCandidate(document, candidates, seenRanges, start, rangeStart, rangeEnd, 'tight')
+      continue
     }
-    if (rangeStart < 0 || rangeEnd < rangeStart) continue
-    const section = document.nodes.slice(rangeStart, rangeEnd + 1)
-    const digest = createHash('sha256')
-      .update(`${document.nodes[rangeStart]!.nodeId}|${section.at(-1)?.nodeId ?? start.nodeId}`)
-      .digest('hex')
-      .slice(0, 24)
-    candidates.push({
-      candidateId: digest,
-      title: start.text.slice(0, 300),
-      startNodeId: document.nodes[rangeStart]!.nodeId,
-      endNodeId: section.at(-1)?.nodeId ?? start.nodeId,
-      ...(document.nodes[rangeStart]!.anchor.page !== undefined
-        ? { startPage: document.nodes[rangeStart]!.anchor.page }
-        : {}),
-      ...(section.at(-1)?.anchor.page !== undefined
-        ? { endPage: section.at(-1)!.anchor.page }
-        : {}),
-      previewText: section
-        .map((node) => node.text.trim())
-        .filter(Boolean)
-        .slice(0, 5)
-        .join(' ｜ ')
-        .slice(0, 1_000),
-      sourceType: document.documentType === 'pdf' ? 'pdf-rebuilt' : 'docx-template',
-      sectionOutline: section
-        .filter((node) => node.kind === 'heading')
-        .map((node) => node.text.slice(0, 200))
-        .slice(0, 100),
-      confidence: document.documentType === 'pdf' ? 0.72 : end ? 0.93 : 0.72,
-      reasons: [
-        '命中招标文件模板章节关键词',
-        ...(document.documentType === 'pdf'
-          ? ['仅保留命中的文本层页面，避免把未确认页面带入草稿']
-          : ['检测到稳定章节边界'])
-      ]
-    })
+    const tightEnd = end
+      ? Math.max(startIndex, document.nodes.findIndex((node) => node.nodeId === end.nodeId) - 1)
+      : -1
+    const tightNonEmpty =
+      tightEnd >= startIndex ? countNonEmpty(document.nodes.slice(startIndex, tightEnd + 1)) : 0
+    // A tight range of one or two nodes is just the section divider page, not
+    // the template set — offer the loose remainder-of-document range instead
+    // so the user can pick the useful one.
+    if (end && tightNonEmpty > 2) {
+      pushCandidate(document, candidates, seenRanges, start, startIndex, tightEnd, 'tight')
+      continue
+    }
+    // No reliable structural boundary (or a near-empty tight range): offer the
+    // remainder of the document as an explicitly-labelled loose candidate.
+    const looseEnd = lastBodyNodeIndex(document, bodyNodes)
+    if (
+      looseEnd > startIndex &&
+      countNonEmpty(document.nodes.slice(startIndex, looseEnd + 1)) >= 2
+    ) {
+      pushCandidate(document, candidates, seenRanges, start, startIndex, looseEnd, 'loose')
+    }
   }
   return candidates.slice(0, 50)
+}
+
+function pushCandidate(
+  document: DocumentSnapshot,
+  candidates: TemplateCandidate[],
+  seenRanges: Set<string>,
+  start: DocumentNode,
+  rangeStart: number,
+  rangeEnd: number,
+  rangeKind: 'tight' | 'loose'
+): void {
+  if (rangeStart < 0 || rangeEnd < rangeStart) return
+  const firstNode = document.nodes[rangeStart]
+  const lastNode = document.nodes[rangeEnd]
+  if (!firstNode || !lastNode) return
+  const rangeKey = `${firstNode.nodeId}→${lastNode.nodeId}`
+  if (seenRanges.has(rangeKey)) return
+  seenRanges.add(rangeKey)
+  const section = document.nodes.slice(rangeStart, rangeEnd + 1)
+  const digest = createHash('sha256')
+    .update(`${firstNode.nodeId}|${lastNode.nodeId}`)
+    .digest('hex')
+    .slice(0, 24)
+  candidates.push({
+    candidateId: digest,
+    title: start.text.trim().slice(0, 300),
+    startNodeId: firstNode.nodeId,
+    endNodeId: lastNode.nodeId,
+    ...(firstNode.anchor.page !== undefined ? { startPage: firstNode.anchor.page } : {}),
+    ...(lastNode.anchor.page !== undefined ? { endPage: lastNode.anchor.page } : {}),
+    previewText: section
+      .map((node) => node.text.trim())
+      .filter(Boolean)
+      .slice(0, 5)
+      .join(' ｜ ')
+      .slice(0, 1_000),
+    sourceType: document.documentType === 'pdf' ? 'pdf-rebuilt' : 'docx-template',
+    sectionOutline: section
+      .filter((node) => node.kind === 'heading')
+      .map((node) => node.text.trim().slice(0, 200))
+      .filter((text) => text.length > 0)
+      .slice(0, 100),
+    confidence: document.documentType === 'pdf' ? 0.72 : rangeKind === 'tight' ? 0.93 : 0.66,
+    reasons: [
+      '命中招标文件模板章节关键词',
+      ...(document.documentType === 'pdf'
+        ? ['仅保留命中的文本层页面，避免把未确认页面带入草稿']
+        : rangeKind === 'tight'
+          ? ['检测到稳定章节边界']
+          : ['章节边界不明确，范围延伸至文档末尾，请人工核对预览内容'])
+    ]
+  })
+}
+
+function countNonEmpty(nodes: readonly DocumentNode[]): number {
+  return nodes.filter((node) => node.text.trim().length > 0).length
+}
+
+function lastBodyNodeIndex(document: DocumentSnapshot, bodyNodes: readonly DocumentNode[]): number {
+  const last = bodyNodes.at(-1)
+  if (!last) return -1
+  return document.nodes.findIndex((node) => node.nodeId === last.nodeId)
 }

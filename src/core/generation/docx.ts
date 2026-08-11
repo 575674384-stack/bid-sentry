@@ -11,6 +11,7 @@ import {
 import { inspectDocxArchive } from '../documents/docx/inspect'
 import { parseStrictXml } from '../documents/xml'
 import { sanitizeDocxMetadata } from '../documents/docx/metadata'
+import { allKnownLabelsPattern, knownLabelPattern, literalLabelPattern } from './labels'
 import type { DocumentSnapshot, FieldAction, TemplateCandidate } from '../../shared/contracts'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -855,42 +856,10 @@ function placeholderLabel(type: FieldAction['placeholderType']): string {
   )
 }
 
-function escapeRegExpLiteral(character: string): string {
-  return character.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
-}
-
-/**
- * Regex source matching a literal (non-known) field label. NFKC-normalized,
- * regex metacharacters escaped, and arbitrary whitespace allowed between
- * characters so `注册 资本` and `注册资本` are the same slot label.
- */
-export function literalLabelPattern(label: string): string {
-  const characters = [...label.normalize('NFKC')].filter(
-    (character) => !/[\s\u3000]/u.test(character)
-  )
-  return characters.map(escapeRegExpLiteral).join('[\\s\u3000]*')
-}
-
 export function replaceFieldValue(original: string, label: string, value: string): string {
-  const labels: Record<string, string> = {
-    bidderName: '投标人(?:名称)?|投标单位(?:名称)?|bidder\\s+name',
-    unifiedSocialCreditCode: '统一社会信用代码',
-    address: '地址',
-    legalRepresentative: '法定代表人',
-    authorizedRepresentative: '授权代表',
-    contact: '联系人',
-    phone: '电话|手机',
-    email: '邮箱|电子邮件',
-    projectName: '项目名称',
-    sectionName: '标段(?:名称)?',
-    compilationDate: '编制日期',
-    duration: '工期|服务期|交货期|合同期限',
-    qualityStandard: '质量标准|质量要求|验收标准',
-    projectNumber: '项目编号|招标编号|标段编号|项目代码'
-  }
-  // Unknown labels belong to dynamic extra fields: match the label literally
-  // so the value still lands in its own slot instead of replacing the node.
-  const labelPattern = labels[label] ?? literalLabelPattern(label)
+  // Known fields use the shared whitespace-tolerant synonym patterns; dynamic
+  // extra-field labels match literally so values land in their own slot.
+  const labelPattern = knownLabelPattern(label) ?? literalLabelPattern(label)
   if (!labelPattern) return value
   const match = new RegExp(`(${labelPattern})\\s*[：:]?\\s*`, 'iu').exec(original)
   if (!match || match.index === undefined) return value
@@ -898,14 +867,12 @@ export function replaceFieldValue(original: string, label: string, value: string
   const remainder = original.slice(valueStart)
   const separator = remainder.search(/[；;，,\n]/u)
   const nextFieldWithSpace = remainder.search(
-    /\s+(?=(?:投标人(?:名称)?|投标单位(?:名称)?|bidder\s+name|统一社会信用代码|地址|法定代表人|授权代表|联系人|电话|手机|邮箱|电子邮件|项目名称|标段(?:名称)?|编制日期|工期|服务期|交货期|合同期限|质量标准|质量要求|验收标准|项目编号|招标编号|标段编号|项目代码)\s*[：:])/iu
+    new RegExp(`\\s+(?=(?:${allKnownLabelsPattern()})[\\s\u3000]*[：:])`, 'iu')
   )
   const nextField =
     nextFieldWithSpace >= 0
       ? nextFieldWithSpace
-      : remainder.search(
-          /(?=(?:投标人(?:名称)?|投标单位(?:名称)?|bidder\s+name|统一社会信用代码|地址|法定代表人|授权代表|联系人|电话|手机|邮箱|电子邮件|项目名称|标段(?:名称)?|编制日期|工期|服务期|交货期|合同期限|质量标准|质量要求|验收标准|项目编号|招标编号|标段编号|项目代码)\s*[：:])/iu
-        )
+      : remainder.search(new RegExp(`(?=(?:${allKnownLabelsPattern()})[\\s\u3000]*[：:])`, 'iu'))
   const boundaries = [separator, nextField].filter((index) => index >= 0)
   const placeholder =
     /^(?:[_＿.．·…]{2,}|[-—–]{2,}|待填写|请填写|请提供|填写|空白|未填写|未提供|<[^>]+>|\[\[[^\]]+\]\]|【[^】]+】)/iu.exec(

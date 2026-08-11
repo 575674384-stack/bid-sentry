@@ -142,16 +142,17 @@ export async function writeDocxArchive(
 
   for (const entry of archive.entries) {
     throwIfAborted(signal)
-    const options = {
+    if (entry.isDirectory) {
+      // yazl forbids compress/size options on directory entries; real Word
+      // packages carry directory entries (`word/`, `_rels/`, …).
+      zipFile.addEmptyDirectory(entry.name, { mtime: entry.lastModified, mode: entry.mode })
+      continue
+    }
+    zipFile.addBuffer(entry.contents, entry.name, {
       mtime: entry.lastModified,
       mode: entry.mode,
       compress: entry.compressionMethod !== 0
-    }
-    if (entry.isDirectory) {
-      zipFile.addEmptyDirectory(entry.name, options)
-    } else {
-      zipFile.addBuffer(entry.contents, entry.name, options)
-    }
+    })
   }
   zipFile.end()
 

@@ -1014,6 +1014,14 @@ async function assertDocxPackageMarkers(filePath: string, signal?: AbortSignal):
             zipFile.readEntry()
             return
           }
+          if (entry.fileName === 'word/document.xml') {
+            // Only the presence of the main document part matters here; real
+            // Word documents routinely exceed 1 MiB, so never read it in this
+            // pre-flight marker scan.
+            markerContents.set(entry.fileName, Buffer.alloc(0))
+            zipFile.readEntry()
+            return
+          }
           if (entry.uncompressedSize > MAX_MARKER_XML_BYTES) {
             reject(new DocumentSafetyError('INVALID_DOCUMENT'))
             return
