@@ -101,6 +101,38 @@ export function detectTemplateSlots(
   return labels.slice(0, 30)
 }
 
+const KNOWN_FORM_FIELDS: readonly KnownFormField[] = [
+  'bidderName',
+  'unifiedSocialCreditCode',
+  'address',
+  'legalRepresentative',
+  'authorizedRepresentative',
+  'contact',
+  'phone',
+  'email',
+  'projectName',
+  'sectionName',
+  'compilationDate'
+]
+
+/**
+ * Structural slot count used to rank template candidates: known-field slots
+ * plus detected extra slots. A cover-page-only range scores 0, which lets the
+ * UI steer the user to the useful range instead of silently picking it.
+ */
+export function countFillableSlots(
+  document: DocumentSnapshot,
+  candidate: TemplateCandidate
+): number {
+  const selected = selectedNodes(document, candidate)
+  const fieldNodes = selected.filter((node) => node.kind !== 'table')
+  let count = detectTemplateSlots(document, candidate).length
+  for (const field of KNOWN_FORM_FIELDS) {
+    if (fieldNodes.some((node) => hasExplicitFormSlot(node, field))) count += 1
+  }
+  return count
+}
+
 export function createFillPlan(
   document: DocumentSnapshot,
   candidate: TemplateCandidate,

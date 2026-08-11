@@ -228,7 +228,8 @@ function TemplateStep({ flow }: { flow: GenerationFlow }): React.JSX.Element | n
 function CandidateCard({ candidate }: { candidate: TemplateCandidate }): React.JSX.Element {
   const meta: string[] = [
     candidate.sourceType === 'docx-template' ? 'DOCX 原始模板' : 'PDF 结构化重建',
-    `置信度 ${Math.round(candidate.confidence * 100)}%`
+    `置信度 ${Math.round(candidate.confidence * 100)}%`,
+    `可填字段 ${candidate.fillableSlots ?? 0} 项`
   ]
   if (candidate.startPage) {
     meta.push(
@@ -246,7 +247,14 @@ function CandidateCard({ candidate }: { candidate: TemplateCandidate }): React.J
       className="candidate-item"
     >
       <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
-        <strong>{candidate.title}</strong>
+        <strong>
+          {candidate.title}
+          {(candidate.fillableSlots ?? 0) === 0 ? (
+            <Tag color="warning" style={{ marginLeft: 8 }}>
+              无字段，可能仅封面
+            </Tag>
+          ) : null}
+        </strong>
         <span className="muted text-sm">{meta.join(' · ')}</span>
         {candidate.sectionOutline.length ? (
           <span className="muted text-sm">章节：{candidate.sectionOutline.join(' / ')}</span>
@@ -439,8 +447,8 @@ function PlanStep({ flow }: { flow: GenerationFlow }): React.JSX.Element | null 
           <Alert
             type="error"
             showIcon
-            title="投标单位名称在模板中没有找到明确字段"
-            description="请回到上一步确认已填写投标单位名称；若模板确实没有该字段，请在招标文件中补充后再分析。程序不会猜测填充位置。"
+            title="当前模板范围内没有找到「投标单位名称」字段"
+            description="请返回上一步，改选「可填字段」更多的模板候选；字段数为 0 的候选通常只是封面或分节页。程序不会猜测填充位置。"
           />
         ) : null}
 

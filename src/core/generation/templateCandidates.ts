@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { DocumentSnapshot, DocumentNode, TemplateCandidate } from '../../shared/contracts'
+import { countFillableSlots } from './fieldPlan'
 
 const TEMPLATE_TITLE_PATTERN =
   /投标文件格式|招标投标[^，。；\n]{0,12}文件格式|资格(?:预|送|后)?审|资格标|投标文件组成|附件格式|qualification\s+(?:review|template)|tender\s+(?:document\s+)?format/iu
@@ -73,7 +74,39 @@ export function findTemplateCandidates(document: DocumentSnapshot): TemplateCand
       pushCandidate(document, candidates, seenRanges, start, startIndex, looseEnd, 'loose')
     }
   }
-  return candidates.slice(0, 50)
+  return rankAndPruneCandidates(document, candidates).slice(0, 50)
+}
+
+/**
+ * Rank candidates by how much they can actually fill, and drop fragment
+ * candidates that are fully contained in a strictly richer one — a cover-page
+ * range with zero slots next to a full template-set range is a trap, not a
+ * choice. The user still makes the final selection explicitly.
+ */
+function rankAndPruneCandidates(
+  document: DocumentSnapshot,
+  candidates: TemplateCandidate[]
+): TemplateCandidate[] {
+  const indexed = candidates.map((candidate) => ({
+    candidate,
+    start: document.nodes.findIndex((node) => node.nodeId === candidate.startNodeId),
+    end: document.nodes.findIndex((node) => node.nodeId === candidate.endNodeId),
+    slots: countFillableSlots(document, candidate)
+  }))
+  const kept = indexed.filter((entry) => {
+    if (entry.start < 0 || entry.end < entry.start) return false
+    return !indexed.some(
+      (other) =>
+        other !== entry &&
+        other.start >= 0 &&
+        other.start <= entry.start &&
+        other.end >= entry.end &&
+        other.slots > entry.slots
+    )
+  })
+  return kept
+    .sort((left, right) => right.slots - left.slots || left.start - right.start)
+    .map((entry) => ({ ...entry.candidate, fillableSlots: entry.slots }))
 }
 
 function pushCandidate(

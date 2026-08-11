@@ -8,6 +8,7 @@ export const TemplateCandidateSchema = z
     endNodeId: z.string().trim().min(1).max(200),
     startPage: z.number().int().positive().optional(),
     endPage: z.number().int().positive().optional(),
+    fillableSlots: z.number().int().nonnegative().optional(),
     previewText: z.string().trim().max(1_000).optional(),
     sourceType: z.enum(['docx-template', 'pdf-rebuilt']),
     sectionOutline: z.array(z.string().trim().max(200)).max(100),

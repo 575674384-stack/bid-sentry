@@ -39,10 +39,10 @@ export const KNOWN_LABEL_SYNONYMS: Readonly<Record<string, readonly string[]>> =
     'Bidder'
   ],
   unifiedSocialCreditCode: ['统一社会信用代码', '信用代码', 'Unified Social Credit Code'],
-  address: ['注册地址', '企业地址', '详细地址', '地址', 'Address'],
+  address: ['地址', '注册地址', '企业地址', '详细地址', 'Address'],
   legalRepresentative: ['法定代表人', '法人代表', 'Legal Representative'],
   authorizedRepresentative: ['授权代表', '委托代理人', '授权委托人'],
-  contact: ['项目联系人', '联系人', 'Contact Person', 'Contact'],
+  contact: ['联系人', '项目联系人', 'Contact Person', 'Contact'],
   phone: ['联系电话', '手机号码', '电话', '手机', 'Telephone', 'Phone', 'Tel'],
   email: ['电子邮箱', '电子邮件', '邮箱', 'E-mail', 'Email'],
   projectName: ['项目名称', '工程名称', 'Project Name'],

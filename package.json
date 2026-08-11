@@ -1,6 +1,6 @@
 {
   "name": "bid-sentry",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Local-first bid document safety assistant",
   "desktopName": "bid-sentry",
   "type": "module",
